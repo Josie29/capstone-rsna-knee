@@ -1,5 +1,7 @@
 from enum import StrEnum
 
+import pandas as pd
+
 from knee.labels import AnatomicalPlane
 
 # Column names in train_series.csv / test_series.csv.
@@ -58,3 +60,56 @@ def classify_series(plane: str, fluid_sensitive: int | bool) -> SeriesType:
             f"{[p.value for p in AnatomicalPlane]}"
         ) from exc
     return _TYPE_BY_PLANE_AND_FLUID[(validated_plane, bool(fluid_sensitive))]
+
+
+# Fluid-sensitive series carry the pathology signal (effusion, edema, tears light up),
+# so all three fluid types outrank any non-fluid one; sagittal first because 94% of
+# train studies have a fluid-sensitive sagittal and it covers ACL/meniscus best.
+SERIES_TYPE_PREFERENCE: tuple[SeriesType, ...] = (
+    SeriesType.SAGITTAL_FLUID,
+    SeriesType.CORONAL_FLUID,
+    SeriesType.AXIAL_FLUID,
+    SeriesType.SAGITTAL_NONFLUID,
+    SeriesType.CORONAL_NONFLUID,
+    SeriesType.AXIAL_NONFLUID,
+)
+
+
+def select_series(study_series: pd.DataFrame) -> str:
+    """Pick the single series to feed the model for one study.
+
+    Studies average 5.5 series and can carry duplicates of a type, so selection must
+    be deterministic. Preference is `SERIES_TYPE_PREFERENCE`; within a type, series
+    where `Fat_Suppression == Fluid_Sensitive` win (the variant matching every train
+    row — the organizers warn the flags can diverge on test data), then the
+    lexicographically smallest SeriesInstanceUID breaks remaining ties.
+
+    Args:
+        study_series: Rows of train_series.csv/test_series.csv for ONE study; must
+            contain the series UID, plane, and both contrast-flag columns.
+
+    Returns:
+        The chosen SeriesInstanceUID.
+
+    Raises:
+        ValueError: If `study_series` is empty or contains an unknown plane (via
+            `classify_series`) — every study in the data has all six-type coverage
+            assumptions checked upstream, so an empty frame means a join bug.
+    """
+    if study_series.empty:
+        raise ValueError("select_series called with no series rows for the study")
+
+    candidates = study_series.copy()
+    candidates["_type"] = [
+        classify_series(row[PLANE_COLUMN], row[FLUID_SENSITIVE_COLUMN])
+        for _, row in candidates.iterrows()
+    ]
+    # Lower is better on every key: preference rank, then non-train-like flag combos
+    # pushed after train-like ones, then UID for determinism.
+    rank = {series_type: index for index, series_type in enumerate(SERIES_TYPE_PREFERENCE)}
+    candidates["_rank"] = [rank[t] for t in candidates["_type"]]
+    candidates["_flag_mismatch"] = (
+        candidates[FAT_SUPPRESSION_COLUMN] != candidates[FLUID_SENSITIVE_COLUMN]
+    ).astype(int)
+    best = candidates.sort_values(["_rank", "_flag_mismatch", SERIES_ID_COLUMN]).iloc[0]
+    return str(best[SERIES_ID_COLUMN])
