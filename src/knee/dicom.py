@@ -14,15 +14,16 @@ class DicomDecodeError(RuntimeError):
     """A slice failed to read or decode (missing handler, corrupt file, bad tags)."""
 
 
-def _read_slice(path: Path) -> tuple[int, np.ndarray]:
+def _read_slice(path: Path) -> tuple[tuple[int, int, str], np.ndarray]:
     """Read one .dcm file to (sort key, float32 pixel array).
 
     Args:
         path: The slice file.
 
     Returns:
-        Tuple of the sort key (`InstanceNumber` when present, else a key derived from
-        the filename) and the rescaled pixel array.
+        Tuple of the sort key (`InstanceNumber` when present; slices without one sort
+        after those with one, by filename — arbitrary but deterministic) and the
+        rescaled pixel array.
 
     Raises:
         DicomDecodeError: If the file cannot be read or its pixel data cannot be
@@ -42,10 +43,10 @@ def _read_slice(path: Path) -> tuple[int, np.ndarray]:
 
     instance_number = getattr(dataset, "InstanceNumber", None)
     if instance_number is not None:
-        return int(instance_number), pixels
-    # Fallback: SOP UIDs as filenames have no meaningful order, but a stable arbitrary
-    # order still beats filesystem order for reproducibility.
-    return hash(path.stem) % (2**31), pixels
+        return (0, int(instance_number), ""), pixels
+    # SOP-UID filenames carry no anatomical order; sorting by name is arbitrary but
+    # deterministic (unlike hash(), which is randomized per process).
+    return (1, 0, path.name), pixels
 
 
 def load_volume(series_dir: Path, *, size: int = 224) -> torch.Tensor:

@@ -99,17 +99,14 @@ def select_series(study_series: pd.DataFrame) -> str:
     if study_series.empty:
         raise ValueError("select_series called with no series rows for the study")
 
-    candidates = study_series.copy()
-    candidates["_type"] = [
-        classify_series(row[PLANE_COLUMN], row[FLUID_SENSITIVE_COLUMN])
-        for _, row in candidates.iterrows()
-    ]
-    # Lower is better on every key: preference rank, then non-train-like flag combos
-    # pushed after train-like ones, then UID for determinism.
     rank = {series_type: index for index, series_type in enumerate(SERIES_TYPE_PREFERENCE)}
-    candidates["_rank"] = [rank[t] for t in candidates["_type"]]
-    candidates["_flag_mismatch"] = (
-        candidates[FAT_SUPPRESSION_COLUMN] != candidates[FLUID_SENSITIVE_COLUMN]
-    ).astype(int)
-    best = candidates.sort_values(["_rank", "_flag_mismatch", SERIES_ID_COLUMN]).iloc[0]
+
+    def preference(row: pd.Series) -> tuple[int, bool, str]:
+        # Lower is better on every key: preference rank, then non-train-like flag
+        # combos pushed after train-like ones, then UID for determinism.
+        series_type = classify_series(row[PLANE_COLUMN], row[FLUID_SENSITIVE_COLUMN])
+        flags_diverge = bool(row[FAT_SUPPRESSION_COLUMN] != row[FLUID_SENSITIVE_COLUMN])
+        return rank[series_type], flags_diverge, str(row[SERIES_ID_COLUMN])
+
+    best = min((row for _, row in study_series.iterrows()), key=preference)
     return str(best[SERIES_ID_COLUMN])

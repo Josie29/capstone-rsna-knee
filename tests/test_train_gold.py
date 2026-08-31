@@ -1,10 +1,14 @@
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
 import torch
+from conftest import write_dicom_slice
 
-from knee.labels import LABEL_COLUMNS
+from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 from knee.model import KneeModel, load_model, save_model
+from knee.train_gold import train_gold
 
 # Random-init (pretrained=False) so tests run offline; small volumes keep them fast.
 _VOLUME = torch.rand(4, 64, 64, generator=torch.Generator().manual_seed(0))
@@ -53,3 +57,70 @@ def test_empty_volume_is_rejected() -> None:
     shape error instead of a clear message naming the contract."""
     with pytest.raises(ValueError, match="non-empty"):
         KneeModel(pretrained=False).pool_features(torch.zeros(0, 64, 64))
+
+
+def _synthetic_comp_root(root: Path) -> Path:
+    """Fake competition layout: 3 loadable gold studies + 1 with a corrupt series."""
+    rng = np.random.default_rng(0)
+    study_uids = ["study0", "study1", "study2", "study_corrupt"]
+    # Every label column sees both classes across the loadable studies.
+    label_rows = [[1] * 12, [0] * 12, [i % 2 for i in range(12)], [1] * 12]
+
+    train = pd.DataFrame(label_rows, columns=list(LABEL_COLUMNS))
+    train.insert(0, STUDY_ID_COLUMN, study_uids)
+    train.insert(1, "Report", "synthetic")
+    train.to_csv(root / "train.csv", index=False)
+
+    series = pd.DataFrame(
+        {
+            STUDY_ID_COLUMN: study_uids,
+            "SeriesInstanceUID": [f"series{i}" for i in range(4)],
+            "Anatomical_Plane": "Sagittal",
+            "Fluid_Sensitive": 1,
+            "Fat_Suppression": 1,
+        }
+    )
+    series.to_csv(root / "train_series.csv", index=False)
+
+    for study_uid, series_uid in zip(study_uids, series["SeriesInstanceUID"]):
+        series_dir = root / "train_series" / study_uid / series_uid
+        series_dir.mkdir(parents=True)
+        if study_uid == "study_corrupt":
+            (series_dir / "bad.dcm").write_bytes(b"not a dicom file")
+            continue
+        for slice_index in range(3):
+            write_dicom_slice(
+                series_dir / f"slice{slice_index}.dcm",
+                rng.integers(0, 1000, (32, 32)),
+                instance_number=slice_index,
+            )
+    return root
+
+
+def test_train_gold_end_to_end(tmp_path: Path) -> None:
+    """Catches integration bugs between selection, decoding, feature caching, and head
+    training that the unit tests miss — e.g. features cached under inference_mode
+    crashing backward, or feature/label misalignment when a study is skipped mid-loop.
+    This composition otherwise only runs on Kaggle, the costliest place to debug."""
+    comp_root = _synthetic_comp_root(tmp_path)
+    checkpoint = tmp_path / "ck.pt"
+
+    result = train_gold(
+        comp_root,
+        checkpoint,
+        model=KneeModel(pretrained=False),
+        input_size=64,
+        log=lambda _: None,
+    )
+
+    assert result.n_studies == 3
+    assert [s.study_uid for s in result.skipped] == ["study_corrupt"]
+    # All 12 labels have both classes across the 3 loaded studies, so no NaNs.
+    assert set(result.in_sample_auc) == set(LABEL_COLUMNS)
+    assert all(0.0 <= v <= 1.0 for v in result.in_sample_auc.values())
+
+    # The checkpoint must reproduce the trained function offline.
+    reloaded, input_size = load_model(checkpoint)
+    assert input_size == 64
+    probs = reloaded.predict_study(torch.rand(3, 64, 64))
+    assert probs.shape == (len(LABEL_COLUMNS),)
