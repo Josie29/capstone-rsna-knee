@@ -10,6 +10,9 @@ submission is an offline Kaggle notebook (≤9h, no internet). We intend to subm
 Three developers collaborate on this repo: Josie, Kelly, and Ryan.
 Issues are tracked via GitHub Issues (`gh issue ...`), not a separate tracker.
 
+Contribution workflow is TODO — see "Contributing" in `README.md` for the options
+under discussion. Until decided, assume feature branches + PR + squash merge.
+
 ## Key docs
 
 - `docs/competition-notes.md` — full competition spec and constraints

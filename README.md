@@ -56,6 +56,22 @@ all count as Competition Data.
 | `docs/` | Competition notes, tech-stack decisions, brainlift. |
 | `tests/` | pytest. |
 
+## Contributing
+
+**TODO (team decision):** pick a workflow before parallel work starts. Options:
+
+1. **PR + one reviewer, squash merge** *(recommended)* — `feature/<desc>` branches off
+   `main`, PR linked to a GitHub Issue, any one teammate approves, squash merge. Keeps
+   `main` clean and reviewable without much overhead for a team of 3.
+2. **Trunk-based, direct to `main`** — everyone pushes small commits straight to `main`,
+   review after the fact via issues. Fastest, but risky once experiments and shared
+   modules (`src/knee/`) start colliding.
+3. **Hybrid** — direct to `main` for docs/notebooks, PRs required for `src/knee/` and
+   `scripts/`.
+
+Whichever we pick: work is tracked as GitHub Issues, and `uv run pytest && uv run pyright
+&& uv run ruff check .` must pass before merge.
+
 ## Checks
 
 ```bash
