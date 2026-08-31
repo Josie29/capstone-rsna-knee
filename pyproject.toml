@@ -29,10 +29,18 @@ train = [
 # Report text is in ~9-12 languages, so the text encoder has to be multilingual from the
 # start - see docs/competition-notes.md.
 text = ["transformers>=4.51", "sentencepiece>=0.2", "accelerate>=1.0"]
-plot = ["matplotlib>=3.9"]
+plot = [
+    "matplotlib>=3.9",
+    "pillow>=11.0",
+]
 
 [dependency-groups]
-dev = ["pytest>=8.0", "pyright>=1.1.390", "ruff>=0.8"]
+dev = [
+    "pytest>=8.0",
+    "pyright>=1.1.390",
+    "ruff>=0.8",
+    "pandas-stubs>=3.0.5.260730",
+]
 
 [build-system]
 requires = ["setuptools>=77"]

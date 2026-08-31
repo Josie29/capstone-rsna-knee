@@ -1,0 +1,1 @@
+1. tie fluid senstiive and fat suppression into 1 for now atleast. Since they are the same on training data there is no actionable difference between the 2 currently.

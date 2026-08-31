@@ -60,6 +60,16 @@ studies are the only ground truth available to check the miner against.
 - 4,407 train studies / 24,371 train series = **5.5 series per study** on average.
   Planes: Sagittal 9,864, Coronal 8,609, Axial 5,898 — so most studies have more than one
   series per plane, and series selection is a real preprocessing decision, not a given.
+- Series metadata is far more uniform than the free-text `SeriesDescription`s suggest.
+  Measured on train_series.csv 2026-08-31: `Fat_Suppression == Fluid_Sensitive` on every
+  row, so only **6 series types** exist (3 planes x fluid/non-fluid — see
+  `src/knee/series.py:SeriesType`), and only 12 per-study compositions. The Data tab
+  warns the two flags are "not necessarily equivalent for every case", i.e. they can
+  diverge on hidden test data — so key logic on `Fluid_Sensitive`, and use
+  `Fat_Suppression` only to prefer the train-like variant when a study offers both. Every study has
+  all 3 planes, ≥1 fluid-sensitive, and ≥1 non-fluid series; 94% have a fluid-sensitive
+  sagittal. Studies with >6 series carry duplicate types, so series *selection* is the
+  preprocessing decision, not series availability.
 - 19 primary + 3 additional contributing sites across ~20 countries.
 - Series: 20–45 slices typical, median 30, long tail to a few hundred.
 - Mixed transfer syntaxes: Explicit VR LE (uncompressed), JPEG Lossless, JPEG 2000,
