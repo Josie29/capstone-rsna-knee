@@ -1,0 +1,364 @@
+<title>Reading the Scans, Mining the Reports — Capstone Deck</title>
+<style>
+  /* Radiology reading-room theme — deliberately single-theme, like the viewer it echoes. */
+  :root {
+    --ground: #0D1420;
+    --panel: #131D2C;
+    --panel-2: #182436;
+    --hairline: #24344A;
+    --ink: #E9EEF5;
+    --ink-2: #93A3B7;
+    --ink-3: #5D6E84;
+    --teal: #17A39A;        /* data marks — validated vs ground */
+    --teal-text: #4FC8C2;   /* text-tint of the accent, for headings/eyebrows */
+    --amber: #BE8330;       /* reserved: TBD / placeholder state */
+    --amber-text: #D9A254;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --s1: 0.25rem; --s2: 0.5rem; --s3: 0.75rem; --s4: 1rem; --s6: 1.5rem; --s8: 2rem; --s12: 3rem;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: clamp(1rem, 1.6vw, 1.25rem);
+    line-height: 1.55; overflow: hidden;
+  }
+
+  .deck { position: fixed; inset: 0; }
+  .slide {
+    position: absolute; inset: 0; display: none;
+    padding: clamp(2rem, 6vh, 4rem) clamp(2rem, 8vw, 7rem);
+    flex-direction: column; justify-content: center;
+    box-sizing: border-box; overflow-y: auto;
+  }
+  .slide.active { display: flex; }
+  @media (prefers-reduced-motion: no-preference) {
+    .slide.active { animation: slidein 240ms ease-out; }
+    @keyframes slidein { from { opacity: 0; transform: translateY(0.4rem); } to { opacity: 1; transform: none; } }
+  }
+
+  /* DICOM-viewer chrome: corner annotations + slice counter */
+  .chrome { position: fixed; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em;
+            color: var(--ink-3); text-transform: uppercase; z-index: 10; pointer-events: none; }
+  .chrome.tl { top: 1rem; left: 1.25rem; }
+  .chrome.tr { top: 1rem; right: 1.25rem; text-align: right; }
+  .chrome.br { bottom: 1rem; right: 1.25rem; text-align: right; }
+  .chrome.bl { bottom: 1rem; left: 1.25rem; }
+  .chrome .im { color: var(--ink-2); }
+  .progress { position: fixed; bottom: 0; left: 0; height: 2px; background: var(--teal);
+              width: 0; transition: width 200ms ease; z-index: 10; }
+
+  .eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.14em;
+             text-transform: uppercase; color: var(--teal-text); margin: 0 0 var(--s4); }
+  h1 { font-size: clamp(2.4rem, 5.5vw, 4.2rem); font-weight: 700; line-height: 1.08;
+       letter-spacing: -0.015em; margin: 0 0 var(--s4); text-wrap: balance; }
+  h2 { font-size: clamp(1.7rem, 3.4vw, 2.6rem); font-weight: 700; line-height: 1.15;
+       letter-spacing: -0.01em; margin: 0 0 var(--s6); text-wrap: balance; max-width: 24ch; }
+  .sub { color: var(--ink-2); font-size: clamp(1.05rem, 1.9vw, 1.35rem); max-width: 46ch; margin: 0; }
+
+  ul.points { margin: 0; padding: 0; list-style: none; max-width: 62ch; }
+  ul.points li { padding-left: 1.4rem; position: relative; margin-bottom: var(--s3); color: var(--ink); }
+  ul.points li::before { content: ""; position: absolute; left: 0; top: 0.62em;
+                         width: 0.55rem; height: 2px; background: var(--teal); }
+  ul.points li .dim { color: var(--ink-2); }
+  strong { font-weight: 600; }
+  .accent { color: var(--teal-text); }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--panel-2);
+         padding: 0.1em 0.35em; border-radius: 3px; }
+
+  /* stat tiles */
+  .stats { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s8); }
+  .stat { background: var(--panel); border: 1px solid var(--hairline); border-radius: 6px;
+          padding: var(--s3) var(--s4); min-width: 7.5rem; }
+  .stat .v { font-family: var(--mono); font-variant-numeric: tabular-nums;
+             font-size: clamp(1.3rem, 2.4vw, 1.8rem); font-weight: 600; color: var(--ink); }
+  .stat .k { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em;
+             text-transform: uppercase; color: var(--ink-3); margin-top: var(--s1); }
+  .stat.hot .v { color: var(--teal-text); }
+
+  /* two-column slide body */
+  .cols { display: grid; grid-template-columns: minmax(22rem, 5fr) 6fr; gap: clamp(2rem, 5vw, 4.5rem);
+          align-items: center; }
+  @media (max-width: 56rem) { .cols { grid-template-columns: 1fr; } }
+
+  /* bar chart */
+  .chart { background: var(--panel); border: 1px solid var(--hairline); border-radius: 8px;
+           padding: var(--s6); }
+  .chart .title { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em;
+                  text-transform: uppercase; color: var(--ink-2); margin-bottom: var(--s4); }
+  .row { display: grid; grid-template-columns: 9.5rem 1fr 2rem; align-items: center;
+         gap: var(--s3); margin-bottom: 0.45rem; }
+  .row .lbl { font-size: 0.78rem; color: var(--ink-2); text-align: right;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .track { height: 0.9rem; position: relative; }
+  .row .bar { position: absolute; inset: 0 auto 0 0; background: var(--teal);
+              border-radius: 0 4px 4px 0; min-width: 3px; transition: filter 120ms; }
+  .row:hover .bar { filter: brightness(1.25); }
+  .row .val { font-family: var(--mono); font-variant-numeric: tabular-nums;
+              font-size: 0.75rem; color: var(--ink-2); }
+  .gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--hairline); }
+
+  /* pipeline */
+  .pipe { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s3); margin: var(--s8) 0 var(--s6); }
+  @media (max-width: 56rem) { .pipe { grid-template-columns: 1fr 1fr; } }
+  .stage { background: var(--panel); border: 1px solid var(--hairline); border-radius: 8px;
+           padding: var(--s4); position: relative; }
+  .stage .n { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em;
+              color: var(--teal-text); }
+  .stage h3 { margin: var(--s2) 0 var(--s2); font-size: 1.1rem; font-weight: 600; }
+  .stage p { margin: 0; font-size: 0.85rem; color: var(--ink-2); line-height: 1.45; }
+  .stage::after { content: "\2192"; /* → between stage cards */ position: absolute; right: -0.95rem; top: 50%;
+                  transform: translateY(-50%); color: var(--ink-3); font-size: 1rem; z-index: 2; }
+  .stage:last-child::after, .stage:nth-child(2n)::after { content: none; }
+  @media (min-width: 56.01rem) { .stage:nth-child(2n):not(:last-child)::after { content: "\2192"; } }
+
+  /* scoreboard */
+  table.score { border-collapse: collapse; margin-top: var(--s6); min-width: min(38rem, 100%); }
+  table.score td { padding: var(--s3) var(--s6) var(--s3) 0; border-bottom: 1px solid var(--hairline); }
+  table.score td:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; padding-right: 0; }
+  .tbd { display: inline-block; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+         color: var(--amber-text); border: 1px solid color-mix(in oklab, var(--amber) 55%, transparent);
+         border-radius: 999px; padding: 0.1rem 0.6rem; }
+
+  .footer-note { margin-top: var(--s8); font-family: var(--mono); font-size: 0.72rem;
+                 letter-spacing: 0.08em; color: var(--ink-3); text-transform: uppercase; }
+
+  .navhint { position: fixed; bottom: 2.4rem; left: 50%; transform: translateX(-50%);
+             font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em;
+             color: var(--ink-3); text-transform: uppercase; z-index: 10; transition: opacity 400ms; }
+
+  :focus-visible { outline: 2px solid var(--teal-text); outline-offset: 2px; }
+</style>
+
+<div class="chrome tl">RSNA Knee Abnormality Detection</div>
+<div class="chrome tr">Gauntlet AI · Capstone</div>
+<div class="chrome bl">Josie Machalek</div>
+<div class="chrome br"><span class="im" id="counter">IM 1 / 10</span></div>
+<div class="progress" id="progress"></div>
+<div class="navhint" id="navhint">&#8592; &#8594; or click to navigate</div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 · Title -->
+  <section class="slide">
+    <p class="eyebrow">Weakly-supervised medical imaging</p>
+    <h1>Reading the Scans,<br>Mining the Reports</h1>
+    <p class="sub">Detecting 12 knee-MRI abnormalities when 98.7% of the training labels
+       have to be mined out of multilingual radiology reports first.</p>
+    <div class="stats">
+      <div class="stat"><div class="v">$77k</div><div class="k">Kaggle · RSNA 2026</div></div>
+      <div class="stat"><div class="v">12</div><div class="k">findings per study</div></div>
+      <div class="stat hot"><div class="v">1.3%</div><div class="k">of studies labeled</div></div>
+    </div>
+  </section>
+
+  <!-- 2 · The Task -->
+  <section class="slide">
+    <p class="eyebrow">The task</p>
+    <h2>One knee MRI study in, 12 probabilities out</h2>
+    <ul class="points">
+      <li><strong>Input:</strong> a multi-planar MRI study — sagittal, coronal, axial;
+          fluid-sensitive and non-fluid sequences <span class="dim">(~5.5 series per study)</span></li>
+      <li><strong>Output:</strong> per-study probability for 12 binary findings — ACL, MCL,
+          both menisci, 3 osteoarthritis compartments, effusion, synovitis, Baker's cyst,
+          contusion, fracture</li>
+      <li><strong>Scored by macro-averaged ROC AUC</strong> — every finding counts equally,
+          rare or common</li>
+      <li><strong>Delivered as a Kaggle notebook</strong> — no internet, 9-hour runtime cap</li>
+    </ul>
+    <div class="stats">
+      <div class="stat"><div class="v">4,407</div><div class="k">train studies</div></div>
+      <div class="stat"><div class="v">24,371</div><div class="k">train series</div></div>
+      <div class="stat"><div class="v">247&nbsp;GiB</div><div class="k">image data</div></div>
+      <div class="stat"><div class="v">~1,300</div><div class="k">test studies</div></div>
+    </div>
+  </section>
+
+  <!-- 3 · The Catch -->
+  <section class="slide">
+    <div class="cols">
+      <div>
+        <p class="eyebrow">The catch</p>
+        <h2>Only 58 of 4,407 studies are labeled</h2>
+        <ul class="points">
+          <li>The other <strong>98.7%</strong> carry only a free-text radiology report —
+              in <strong>~a dozen languages</strong> across ~20 countries</li>
+          <li>The report <strong>does not exist at test time</strong> — text is a training
+              tool, not an input</li>
+          <li>So the real task: <span class="accent">mine labels from reports, then train
+              an imaging model on what you mined</span></li>
+          <li>The 58 gold studies are the only ground truth to validate the mining —
+              far too few to steer model selection alone</li>
+        </ul>
+      </div>
+      <div class="chart" id="chart">
+        <div class="title">Positives per finding · the 58 gold-labeled studies</div>
+        <!-- bars injected by script -->
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · The Plan -->
+  <section class="slide">
+    <p class="eyebrow">The plan</p>
+    <h2>Four stages, mined labels first</h2>
+    <div class="pipe">
+      <div class="stage"><span class="n">STAGE 01</span><h3>Mine</h3>
+        <p>Multilingual report &rarr; 12 pseudo-labels per study, validated against the 58 gold studies.</p></div>
+      <div class="stage"><span class="n">STAGE 02</span><h3>Select</h3>
+        <p>Pick the right series per study — 6 types (3 planes &times; fluid / non-fluid) — decode and normalize DICOM.</p></div>
+      <div class="stage"><span class="n">STAGE 03</span><h3>Train</h3>
+        <p>Pretrained 2D backbones per plane, fused to study-level predictions, trained on pseudo-labels.</p></div>
+      <div class="stage"><span class="n">STAGE 04</span><h3>Submit</h3>
+        <p>Offline inference notebook, weights attached as datasets, budgeted under 9 hours.</p></div>
+    </div>
+    <p class="sub"><strong class="accent">Sequencing insight:</strong> mining quality sets the ceiling
+       on everything downstream — and it can be built and iterated without touching a single DICOM.</p>
+  </section>
+
+  <!-- 5 · Stage 1 -->
+  <section class="slide">
+    <p class="eyebrow">Stage 01 · Mine</p>
+    <h2>The ceiling-setter: reports become labels</h2>
+    <ul class="points">
+      <li>A multilingual encoder reads each report and emits 12 binary pseudo-labels</li>
+      <li><span class="dim">Rejected — regex/keyword rules:</span> ~12 languages &times; 12 findings
+          &times; negation handling is brittle beyond a sanity pass</li>
+      <li><span class="dim">Rejected — translate-then-English-model:</span> adds a failure stage;
+          multilingual encoders skip it</li>
+      <li>Validation: per-finding agreement with the 58 gold studies</li>
+      <li><strong>Every point of label noise here is noise the imaging model trains on</strong></li>
+    </ul>
+    <table class="score">
+      <tr><td>Miner agreement vs gold set</td><td><span class="tbd">TBD</span></td></tr>
+    </table>
+  </section>
+
+  <!-- 6 · Stages 2+3 -->
+  <section class="slide">
+    <p class="eyebrow">Stages 02–03 · Select &amp; Train</p>
+    <h2>From 247 GiB of DICOM to a model</h2>
+    <ul class="points">
+      <li>Series metadata collapses to <strong>6 types</strong> — 3 planes &times; fluid-sensitive /
+          non-fluid. Every study has all 3 planes, so <em>selection</em> is the decision, not availability</li>
+      <li>Mixed compression (JPEG Lossless, JPEG 2000, uncompressed) — half the data
+          won't decode without the right handlers</li>
+      <li>Per-plane 2D backbones over slices &rarr; series aggregate &rarr; plane fusion &rarr;
+          12 study-level probabilities</li>
+      <li>Trained on Kaggle GPUs with the data pre-mounted — skipping the 247 GiB download entirely</li>
+    </ul>
+    <table class="score">
+      <tr><td>Final architecture</td><td><span class="tbd">TBD</span></td></tr>
+      <tr><td>Cross-validation macro AUC</td><td><span class="tbd">TBD</span></td></tr>
+    </table>
+  </section>
+
+  <!-- 7 · Stage 4 -->
+  <section class="slide">
+    <p class="eyebrow">Stage 04 · Submit</p>
+    <h2>The 9-hour box</h2>
+    <ul class="points">
+      <li><strong>No internet:</strong> code and weights ship as Kaggle datasets attached to the notebook</li>
+      <li>~1,300 studies &times; ~30 slices &times; several series must fit in 9 hours —
+          inference cost was budgeted <em>before</em> choosing an architecture</li>
+      <li><strong>Efficiency track:</strong> a second prize pool scores AUC per unit runtime —
+          being fast is itself a leaderboard</li>
+      <li>The repo is the source of truth — notebooks are thin wrappers over
+          <code>src/knee/</code>, deployed by API, never edited in the web UI</li>
+    </ul>
+  </section>
+
+  <!-- 8 · Results -->
+  <section class="slide">
+    <p class="eyebrow">Results</p>
+    <h2>The scoreboard</h2>
+    <p class="sub">Filled in as runs land — the deck stays honest about status.</p>
+    <table class="score">
+      <tr><td>Miner agreement vs 58 gold studies</td><td><span class="tbd">TBD</span></td></tr>
+      <tr><td>Cross-validation macro AUC</td><td><span class="tbd">TBD</span></td></tr>
+      <tr><td>Public leaderboard macro AUC</td><td><span class="tbd">TBD</span></td></tr>
+      <tr><td>Inference runtime</td><td><span class="tbd">TBD</span> / 9h</td></tr>
+    </table>
+    <p class="footer-note">Baseline: all-0.5 sample submission scores 0.5 AUC</p>
+  </section>
+
+  <!-- 9 · Why it matters -->
+  <section class="slide">
+    <p class="eyebrow">Why this matters</p>
+    <h2>Radiologist time is the scarcest input in medical AI</h2>
+    <ul class="points">
+      <li>Expert annotation is the bottleneck — labeling thousands of MRI studies by hand
+          doesn't scale</li>
+      <li>But hospitals already hold millions of studies <strong>with reports attached</strong> —
+          weak supervision from reports is how those archives get unlocked</li>
+      <li>Multilingual mining is the realistic version of the problem: real archives span
+          languages and sites <span class="dim">(this dataset: 22 sites, ~20 countries)</span></li>
+      <li>The recipe generalizes to any paired image + report modality — chest X-ray, CT, pathology</li>
+    </ul>
+  </section>
+
+  <!-- 10 · What's next -->
+  <section class="slide">
+    <p class="eyebrow">What's next</p>
+    <h2>Extensions on the table</h2>
+    <ul class="points">
+      <li><strong>Better miner:</strong> LLM-based labeling vs local encoder
+          <span class="dim">(pending a rules check on sending report text to external APIs)</span></li>
+      <li><strong>Self-training loop:</strong> retrain miner and imaging model on each other's
+          confident predictions</li>
+      <li><strong>3D architectures:</strong> does true volumetric context pay for its runtime?</li>
+      <li><strong>Per-finding calibration:</strong> macro AUC rewards ranking each finding well independently</li>
+      <li><strong>Efficiency track:</strong> distillation and pruning for the runtime-scored prize pool</li>
+    </ul>
+    <p class="footer-note">Final submission deadline · 2026-10-22</p>
+  </section>
+
+</div>
+
+<script>
+  // Chart data: positives per finding among the 58 gold-labeled studies (docs/competition-notes.md)
+  const FINDINGS = [
+    ["Effusion", 35], ["Synovitis", 27], ["Medial Meniscus", 26], ["ACL", 24],
+    ["Lateral Meniscus", 23], ["PF OA", 21], ["Contusion", 19], ["Fracture", 18],
+    ["Medial OA", 15], ["Baker's Cyst", 12], ["Lateral OA", 11], ["MCL", 9],
+  ];
+  const chart = document.getElementById("chart");
+  const MAX = 40; // axis max above top value for headroom
+  for (const [name, n] of FINDINGS) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.title = `${name}: ${n} of 58 studies positive`;
+    row.innerHTML = `<span class="lbl">${name}</span>` +
+      `<span class="track"><span class="bar" style="width:${(n / MAX) * 100}%"></span></span>` +
+      `<span class="val">${n}</span>`;
+    chart.appendChild(row);
+  }
+
+  // Deck navigation
+  const slides = [...document.querySelectorAll(".slide")];
+  const counter = document.getElementById("counter");
+  const progress = document.getElementById("progress");
+  const navhint = document.getElementById("navhint");
+  let cur = Math.min(Math.max((parseInt(location.hash.slice(1), 10) || 1) - 1, 0), slides.length - 1);
+
+  function show(i) {
+    cur = Math.min(Math.max(i, 0), slides.length - 1);
+    slides.forEach((s, j) => s.classList.toggle("active", j === cur));
+    counter.textContent = `IM ${cur + 1} / ${slides.length}`;
+    progress.style.width = `${((cur + 1) / slides.length) * 100}%`;
+    history.replaceState(null, "", `#${cur + 1}`);
+    if (cur > 0) navhint.style.opacity = "0";
+  }
+  show(cur);
+
+  addEventListener("keydown", (e) => {
+    if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key)) { e.preventDefault(); show(cur + 1); }
+    else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); show(cur - 1); }
+    else if (e.key === "Home") show(0);
+    else if (e.key === "End") show(slides.length - 1);
+  });
+  addEventListener("click", (e) => {
+    if (e.target.closest("a, .chart")) return;
+    show(e.clientX < innerWidth / 3 ? cur - 1 : cur + 1);
+  });
+</script>
