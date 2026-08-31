@@ -1,0 +1,21 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.pytest_cache/
+*.egg-info/
+
+# Competition data is tens of GB of DICOM and is redownloaded with scripts/download_data.py.
+data/raw/
+data/interim/
+# data/processed/ is deliberately NOT ignored - it holds the small label manifests and
+# fold assignments a grader has to be able to read without a Kaggle account.
+
+# Checkpoints are large and reproducible; the run manifest is not.
+checkpoints/
+wandb/
+lightning_logs/
+
+# Generated submission CSVs. Keep the scored ones by exception, like results/ in project-10.
+submissions/*.csv
