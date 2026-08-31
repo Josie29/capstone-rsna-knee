@@ -3,9 +3,11 @@ from typing import Any
 
 import timm
 import torch
+from pydantic import BaseModel, ConfigDict
 from torch import nn
 
 from knee.labels import LABEL_COLUMNS
+from knee.series import SeriesType
 
 # ImageNet statistics — required because the backbone starts from ImageNet weights.
 _IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -84,7 +86,19 @@ class KneeModel(nn.Module):
         return torch.sigmoid(self.forward(volume))
 
 
-def save_model(model: KneeModel, path: Path, *, input_size: int) -> None:
+class LoadedModel(BaseModel):
+    """A checkpointed model plus the metadata inference needs to feed it correctly."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    model: KneeModel
+    input_size: int
+    # The one series type this model consumes — specialist models must never be fed
+    # another type (a fluid-trained model reads non-fluid contrast backwards).
+    series_type: SeriesType
+
+
+def save_model(model: KneeModel, path: Path, *, input_size: int, series_type: SeriesType) -> None:
     """Write the full model (backbone + head weights) plus reproduction metadata.
 
     The whole state dict is saved — not just the head — because the submission
@@ -94,26 +108,29 @@ def save_model(model: KneeModel, path: Path, *, input_size: int) -> None:
         model: The trained model.
         path: Destination .pt file.
         input_size: The slice resize target the model was trained with.
+        series_type: The series type the model was trained on; stored so inference
+            routes the right series to it without filename conventions.
     """
     torch.save(
         {
             "state_dict": model.state_dict(),
             "backbone": model.backbone_name,
             "input_size": input_size,
+            "series_type": series_type.value,
             "label_columns": list(LABEL_COLUMNS),
         },
         path,
     )
 
 
-def load_model(path: Path) -> tuple[KneeModel, int]:
+def load_model(path: Path) -> LoadedModel:
     """Rebuild a model saved by `save_model`, without needing internet access.
 
     Args:
         path: The .pt checkpoint.
 
     Returns:
-        The model in eval mode, and the input size it expects.
+        The model in eval mode with its input size and native series type.
 
     Raises:
         ValueError: If the checkpoint's label order does not match `LABEL_COLUMNS` —
@@ -126,4 +143,8 @@ def load_model(path: Path) -> tuple[KneeModel, int]:
     model = KneeModel(payload["backbone"], pretrained=False)
     model.load_state_dict(payload["state_dict"])
     model.eval()
-    return model, int(payload["input_size"])
+    return LoadedModel(
+        model=model,
+        input_size=int(payload["input_size"]),
+        series_type=SeriesType(payload["series_type"]),
+    )

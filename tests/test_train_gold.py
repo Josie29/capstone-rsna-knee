@@ -8,6 +8,7 @@ from conftest import write_dicom_slice
 
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 from knee.model import KneeModel, load_model, save_model
+from knee.series import SeriesType
 from knee.train_gold import train_gold
 
 # Random-init (pretrained=False) so tests run offline; small volumes keep them fast.
@@ -22,11 +23,12 @@ def test_model_round_trips_through_checkpoint(tmp_path: Path) -> None:
     model.eval()
     before = model.predict_study(_VOLUME)
 
-    save_model(model, tmp_path / "ck.pt", input_size=64)
-    reloaded, input_size = load_model(tmp_path / "ck.pt")
-    after = reloaded.predict_study(_VOLUME)
+    save_model(model, tmp_path / "ck.pt", input_size=64, series_type=SeriesType.CORONAL_FLUID)
+    loaded = load_model(tmp_path / "ck.pt")
+    after = loaded.model.predict_study(_VOLUME)
 
-    assert input_size == 64
+    assert loaded.input_size == 64
+    assert loaded.series_type is SeriesType.CORONAL_FLUID
     torch.testing.assert_close(before, after)
 
 
@@ -43,7 +45,7 @@ def test_tampered_label_order_is_rejected(tmp_path: Path) -> None:
     """Catches a checkpoint from a stale code version whose label order differs —
     loading it would silently assign every probability to the wrong finding."""
     model = KneeModel(pretrained=False)
-    save_model(model, tmp_path / "ck.pt", input_size=64)
+    save_model(model, tmp_path / "ck.pt", input_size=64, series_type=SeriesType.SAGITTAL_FLUID)
     payload = torch.load(tmp_path / "ck.pt", weights_only=True)
     payload["label_columns"] = list(reversed(payload["label_columns"]))
     torch.save(payload, tmp_path / "bad.pt")
@@ -113,6 +115,7 @@ def test_train_gold_end_to_end(tmp_path: Path) -> None:
         log=lambda _: None,
     )
 
+    assert result.series_type is SeriesType.SAGITTAL_FLUID
     assert result.n_studies == 3
     assert [s.study_uid for s in result.skipped] == ["study_corrupt"]
     # All 12 labels have both classes across the 3 loaded studies, so no NaNs.
@@ -120,7 +123,25 @@ def test_train_gold_end_to_end(tmp_path: Path) -> None:
     assert all(0.0 <= v <= 1.0 for v in result.in_sample_auc.values())
 
     # The checkpoint must reproduce the trained function offline.
-    reloaded, input_size = load_model(checkpoint)
-    assert input_size == 64
-    probs = reloaded.predict_study(torch.rand(3, 64, 64))
+    loaded = load_model(checkpoint)
+    assert loaded.input_size == 64
+    assert loaded.series_type is SeriesType.SAGITTAL_FLUID
+    probs = loaded.model.predict_study(torch.rand(3, 64, 64))
     assert probs.shape == (len(LABEL_COLUMNS),)
+
+
+def test_training_a_type_the_studies_lack_fails_loudly(tmp_path: Path) -> None:
+    """Catches the strict-typing rule regressing into a fallback cascade — a coronal
+    model silently training on sagittal series would specialize on the wrong view
+    while reporting success."""
+    comp_root = _synthetic_comp_root(tmp_path)  # layout only has sagittal fluid series
+
+    with pytest.raises(ValueError, match="Every gold study failed"):
+        train_gold(
+            comp_root,
+            tmp_path / "ck.pt",
+            series_type=SeriesType.CORONAL_FLUID,
+            model=KneeModel(pretrained=False),
+            input_size=64,
+            log=lambda _: None,
+        )
