@@ -18,6 +18,8 @@ under discussion. Until decided, assume feature branches + PR + squash merge.
 - `docs/competition-notes.md` — full competition spec and constraints
 - `docs/tech-stack.md` — stack choices and rejected alternatives
 - `docs/DECISIONS.md` — running decision log
+- `docs/experiments.md` — curated experiment registry; every meaningful experiment gets a
+  row + hypothesis/outcome log entry (conventions in the file header)
 - `docs/presentation/slides.md` — final demo deck content (`deck.html` is the visual)
 
 ## Presentation
@@ -40,3 +42,10 @@ When a milestone lands (results, a pivot, a new insight), consider whether
 - Python 3.12, managed with `uv` (`uv sync`, `uv run ...`)
 - pyright strict + ruff; pydantic v2 for structured data
 - Never commit data or log report text/UIDs (competition rule 2.4.b)
+- Experiments: ID `E###-short-slug`; add the `docs/experiments.md` row + hypothesis when
+  starting one, fill the outcome when it resolves. Raw runs/curves go to wandb
+  (`rsna-knee` project) — the markdown file is the curated story, not a run dump.
+- Notebooks: thin shells over `src/knee/`; strip outputs before commit
+  (`jupyter nbconvert --clear-output --inplace <nb>`); Kaggle kernels are deployed
+  push-only via `kaggle kernels push` — never edited in the Kaggle web UI. Details in
+  `notebooks/README.md`.

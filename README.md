@@ -53,7 +53,7 @@ all count as Competition Data.
 | `scripts/` | Entry points, run from the repo root via `uv run`. |
 | `data/`, `checkpoints/`, `submissions/` | Gitignored. Redownloadable or regenerable. |
 | `notebooks/` | Exploration, plus the Kaggle submission notebook. |
-| `docs/` | Competition notes, tech-stack decisions, brainlift. |
+| `docs/` | Competition notes, tech-stack decisions, experiment log, brainlift. |
 | `tests/` | pytest. |
 
 ## Contributing
@@ -71,6 +71,14 @@ all count as Competition Data.
 
 Whichever we pick: work is tracked as GitHub Issues, and `uv run pytest && uv run pyright
 && uv run ruff check .` must pass before merge.
+
+Two more team conventions, regardless of workflow:
+
+- Every experiment that produces a score or submission gets a row + log entry in
+  [docs/experiments.md](docs/experiments.md) (ID scheme and rules in the file header).
+  Raw runs live in wandb; the markdown file is the curated story.
+- Notebook hygiene — outputs stripped before commit, push-only Kaggle deployment — is
+  spelled out in [notebooks/README.md](notebooks/README.md).
 
 ## Checks
 
