@@ -15,6 +15,12 @@ from pydantic import BaseModel
 
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 from knee.paths import paths
+from knee.series import (
+    FLUID_SENSITIVE_COLUMN,
+    PLANE_COLUMN,
+    SERIES_ID_COLUMN,
+    classify_series,
+)
 
 MAX_EDGE_PX = 512  # slices are downscaled to this so the HTML stays a reasonable size
 
@@ -24,6 +30,7 @@ class SeriesPanel(BaseModel):
 
     series_uid: str
     description: str
+    series_type: str | None
     rows: int
     columns: int
     slice_data_uris: list[str]
@@ -61,11 +68,32 @@ def window_slice(ds: pydicom.Dataset) -> np.ndarray:
     return (scaled * 255).astype(np.uint8)
 
 
-def render_series(series_dir: Path) -> SeriesPanel:
+def load_series_types() -> dict[str, str]:
+    """Map SeriesInstanceUID to its canonical SeriesType across both metadata CSVs.
+
+    Returns:
+        UID -> SeriesType value for every series listed in train_series.csv and
+        test_series.csv; empty for CSVs that are not downloaded.
+    """
+    types: dict[str, str] = {}
+    for csv_name in ("train_series.csv", "test_series.csv"):
+        csv_path = paths.raw / csv_name
+        if not csv_path.is_file():
+            continue
+        rows = pd.read_csv(csv_path)
+        for _, row in rows.iterrows():
+            types[str(row[SERIES_ID_COLUMN])] = classify_series(
+                str(row[PLANE_COLUMN]), int(row[FLUID_SENSITIVE_COLUMN])
+            ).value
+    return types
+
+
+def render_series(series_dir: Path, series_type: str | None) -> SeriesPanel:
     """Render every slice of one series into embedded PNG data URIs.
 
     Args:
         series_dir: Directory holding the series' .dcm files.
+        series_type: Canonical SeriesType value, when the series is in the metadata.
 
     Returns:
         The series with slices sorted by InstanceNumber, each a base64 PNG data URI.
@@ -95,6 +123,7 @@ def render_series(series_dir: Path) -> SeriesPanel:
     return SeriesPanel(
         series_uid=series_dir.name,
         description=str(first.get("SeriesDescription", "?")),
+        series_type=series_type,
         rows=int(first.Rows),
         columns=int(first.Columns),
         slice_data_uris=uris,
@@ -160,9 +189,13 @@ def build_html(study_uid: str, panels: list[SeriesPanel], context: StudyContext)
     sections = "".join(
         f"""
         <section class="panel" data-count="{len(p.slice_data_uris)}">
-          <h2>{html.escape(p.description)}
-            <span class="meta">{len(p.slice_data_uris)} slices · {p.rows}×{p.columns}
-             · ...{html.escape(p.series_uid[-12:])}</span></h2>
+          <h2>{html.escape(p.series_type or p.description)}
+            <span class="meta">{html.escape(" · ".join(filter(None, (
+                p.description if p.series_type else None,
+                f"{len(p.slice_data_uris)} slices",
+                f"{p.rows}×{p.columns}",
+                f"...{p.series_uid[-12:]}",
+            ))))}</span></h2>
           <img src="{p.slice_data_uris[len(p.slice_data_uris) // 2]}" alt="{html.escape(p.description)}">
           <div class="controls">
             <input type="range" min="0" max="{len(p.slice_data_uris) - 1}"
@@ -280,7 +313,8 @@ def main() -> None:
     study_uid = study_dir.name
     series_dirs = sorted(d for d in study_dir.iterdir() if d.is_dir())
     print(f"Rendering {len(series_dirs)} series from {study_uid}", file=sys.stderr)
-    panels = [render_series(d) for d in series_dirs]
+    series_types = load_series_types()
+    panels = [render_series(d, series_types.get(d.name)) for d in series_dirs]
     context = load_study_context(study_uid)
 
     out_dir = paths.interim / "viewer"
