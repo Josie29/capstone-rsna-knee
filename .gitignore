@@ -6,16 +6,16 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 
-# Competition data is tens of GB of DICOM and is redownloaded with scripts/download_data.py.
-data/raw/
-data/interim/
-# data/processed/ is deliberately NOT ignored - it holds the small label manifests and
-# fold assignments a grader has to be able to read without a Kaggle account.
+# Competition rule 2.4.b forbids redistributing Competition Data to non-participants, and
+# this repo is public. Nothing derived from train.csv - report text, label CSVs, extracted
+# pixel data, fold assignments keyed to StudyInstanceUID - may be committed. All of data/
+# stays out; redownload with scripts/download_data.py.
+data/
 
-# Checkpoints are large and reproducible; the run manifest is not.
+# Checkpoints are large and are trained from Competition Data; publish via Kaggle Models.
 checkpoints/
 wandb/
 lightning_logs/
 
-# Generated submission CSVs. Keep the scored ones by exception, like results/ in project-10.
-submissions/*.csv
+# Submission CSVs contain per-study predictions keyed to test StudyInstanceUIDs.
+submissions/

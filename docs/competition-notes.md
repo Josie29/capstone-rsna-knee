@@ -1,60 +1,118 @@
 # RSNA Knee Abnormality Detection — competition notes
 
-Facts gathered 2026-08-31 from the RSNA challenge page and press coverage. **Everything
-here needs confirming against the Kaggle Overview, Data, and Evaluation tabs before it
-drives a design decision** — the Kaggle pages render client-side and could not be read
-without a logged-in browser.
+Read off the Kaggle Overview / Data / Rules tabs 2026-08-31. Archive size confirmed via
+the API the same day (see Data). Train row counts still need the data in hand.
 
 ## Task
 
-Detect and classify clinically important abnormalities on multi-planar knee MRI. Reported
-as 12 findings spanning ligament injury, meniscal damage, cartilage loss, bone marrow
-lesions, effusion, synovitis, and cysts. **Exact label list: unconfirmed.**
+Per-**study** probability for each of 12 binary findings, from multi-planar knee MRI plus
+(training only) the free-text radiology report.
 
-The distinguishing feature: this is the first RSNA challenge to pair images *with*
-radiology report text, and the reports are multilingual — sources say ~9 to ~12 languages.
-Labels were derived from those reports by experts.
+## Labels — submission column order
+
+`StudyInstanceUID, ACL, MCL, Medial Meniscus, Lateral Meniscus, Medial OA, Lateral OA,
+PF OA, Effusion, Synovitis, Baker's, Contusion, Fracture`
+
+ACL/MCL = ligament injury. OA columns are the three compartments (medial tibiofemoral,
+lateral tibiofemoral, patellofemoral). `Baker's` = Baker's cyst; `Contusion` = bone bruise.
+Note the apostrophe and the spaces — column names must match exactly.
+
+## The central problem
+
+> "Only a small subset of training studies carry per-condition labels. We also provide the
+> original text of the radiology report from which you may wish to derive the labels for
+> the remaining studies."
+
+So this is **weak supervision**: the bulk of the training signal has to be mined out of
+multilingual free-text reports first. **The report field is NOT provided at test time.**
+Text is a label-generation and auxiliary-supervision tool, not a test-time input.
+
+Measured from `train.csv` 2026-08-31 — "small subset" is smaller than it sounds:
+
+- **58 of 4,407 studies are labeled (1.3%).** All 12 columns are populated together, so
+  it is 58 fully-labeled studies, not 4,407 partially-labeled ones. No column has extra
+  coverage to exploit.
+- All 4,407 studies have report text. Every unlabeled study is reachable only through text.
+- Positives among the 58, per column: Effusion 35, Synovitis 27, Medial Meniscus 26,
+  ACL 24, Lateral Meniscus 23, PF OA 21, Contusion 19, Fracture 18, Medial OA 15,
+  Baker's 12, Lateral OA 11, MCL 9. Reasonably balanced, but n=58 means a
+  validation AUC computed on this set alone has enormous variance — it cannot be the
+  primary model-selection signal.
+
+Consequence for sequencing: report-mining quality sets the ceiling on everything
+downstream, and it can be built and iterated **without a single DICOM**. The 58 labeled
+studies are the only ground truth available to check the miner against.
 
 ## Data
 
-- \>5,000 knee MRI exams, 16–19 institutions worldwide (sources disagree on the site count).
-- Multi-planar (expect sagittal / coronal / axial series per exam), DICOM.
-- Per-exam radiology report text in mixed languages.
-- **Unconfirmed:** total archive size, series naming, whether report text is provided for
-  the test split or training only.
+| File | Contents |
+| --- | --- |
+| `train.csv` | 4,407 rows, one per study: `StudyInstanceUID`, `Report` (free text, many languages), 12 binary label columns (only 58 rows populated). 5.4 MiB. |
+| `train_series.csv` | 24,371 rows, one per series: `StudyInstanceUID`, `SeriesInstanceUID`, `Fluid_Sensitive` (0/1), `Fat_Suppression` (0/1), `Anatomical_Plane`. 3.3 MiB. |
+| `train_series/` | `<StudyUID>/<SeriesUID>/<SOPUID>.dcm` — one slice per file. |
+| `test.csv` | `StudyInstanceUID` only. ~1300 studies at scoring time; the 3 shipped rows are placeholders. |
+| `test_series.csv`, `test_series/` | Same schema/layout as train, swapped in at scoring. |
+| `sample_submission.csv` | All 12 columns at 0.5. |
+
+- **Archive size: 265,018,885,676 bytes = 247 GiB compressed.** Confirmed 2026-08-31 from
+  the `Content-Length` of the Kaggle `competitions/data/download-all` endpoint. The naive
+  download-then-unzip path needs ~500 GiB at peak; streaming the unzip avoids the double.
+- 4,407 train studies / 24,371 train series = **5.5 series per study** on average.
+  Planes: Sagittal 9,864, Coronal 8,609, Axial 5,898 — so most studies have more than one
+  series per plane, and series selection is a real preprocessing decision, not a given.
+- 19 primary + 3 additional contributing sites across ~20 countries.
+- Series: 20–45 slices typical, median 30, long tail to a few hundred.
+- Mixed transfer syntaxes: Explicit VR LE (uncompressed), JPEG Lossless, JPEG 2000,
+  Implicit VR LE. **pydicom needs `pylibjpeg`/`gdcm` handlers or ~half the data won't decode.**
+- DICOMs stripped to an allowlist of 86 tags. Intensities, orientation, resolution all vary.
+- Prevalence is **not** guaranteed to match across train / public LB / private LB.
 
 ## Evaluation
 
-Hidden test set. Sources mention ROC-AUC and log loss; a community repo cites both.
-**Unconfirmed — read the Evaluation tab.** There is a separate **efficiency track** that
-scores accuracy against compute cost, which usually implies a notebook-submission format
-with a wall-clock limit.
+**Macro-averaged ROC AUC** over the 12 targets — unweighted mean of per-column AUC. Rare
+classes count as much as common ones, so per-column calibration matters more than a single
+global loss.
 
-## Timeline
+### Efficiency track (3 extra prizes)
+
+Minimize `Efficiency = AUC / (Benchmark - maxAUC) + RuntimeSeconds / 32400`, where
+Benchmark is the `sample_submission.csv` score and maxAUC is the best private-LB AUC.
+Eligible only if selected as a final submission and ranked above the benchmark. A
+submission can win both tracks. Daily public efficiency leaderboard notebook exists.
+
+## Submission mechanics — notebook-only code competition
+
+- CPU **and** GPU notebooks: ≤ 9 hours runtime (32,400s — the efficiency denominator).
+- **Internet access disabled.** Pretrained weights must be attached as Kaggle datasets/models.
+- Freely & publicly available external data and pretrained models are allowed.
+- Output must be named `submission.csv`.
+- 5 submissions/day; 2 final submissions selected; max team size 5.
+
+~1300 test studies × ~median 30 slices × several series in 9 hours is the real constraint.
+Budget inference cost before choosing an architecture.
+
+## Timeline (all 11:59 PM UTC)
 
 | Date | Milestone |
 | --- | --- |
-| 2026-07-30 | Competition opened |
-| 2026-10-15 | Entry / team-merger deadline |
+| 2026-07-30 | Start |
+| 2026-10-15 | Entry deadline + team merger deadline |
 | 2026-10-22 | Final submission deadline |
-| 2026-11-05 | Winner requirements due |
-| 2026-11-29 – 12-03 | RSNA 2026, Chicago — winners recognized |
+| 2026-11-05 | Winners' requirements (training code, video, method description) |
+| 2026-11-29 – 12-03 | RSNA 2026, Chicago — recognition event, fee waived |
 
-$77,000 prize pool across the main leaderboard and the efficiency track.
+## Rules that constrain this repo
 
-## Open questions to resolve first
-
-1. Exact label set and whether the target is per-exam multi-label or per-series.
-2. Metric — if it is mean column-wise AUC, class imbalance strategy matters more than loss choice.
-3. Submission mechanics: notebook-only? GPU/CPU quota? runtime cap? This decides whether a
-   heavyweight multilingual text encoder is even affordable at inference.
-4. Is report text available at test time, or is it train-only supervision (i.e. a
-   distillation / auxiliary-loss setup rather than a true multimodal model)?
-5. Archive size, to size the data volume before renting a GPU box.
+- **Data security (2.4.b): do not redistribute Competition Data to non-participants.**
+  Nothing derived from `train.csv` — report text, label CSVs, extracted DICOM pixel data —
+  goes in this public repo. `.gitignore` excludes all of `data/`.
+- Winner license is **CC-BY-NC 4.0**; winners must also publish a video, an open-source
+  code link, and publicly distributable weights.
+- Data use governed by the RSNA MIRA license: <http://rsna.org/mira-license>
+- One Kaggle account per person; no submitting from multiple accounts.
 
 ## Sources
 
 - <https://www.kaggle.com/competitions/rsna-knee-abnormality-detection/overview>
-- <https://www.rsna.org/artificial-intelligence/ai-image-challenge/knee-mri-ai-challenge>
-- <https://www.rsna.org/news/2026/august/ai-challenge-knee-mri>
-- <https://runtimewire.com/article/rsna-knee-mri-ai-challenge-2026>
+- <https://www.kaggle.com/competitions/rsna-knee-abnormality-detection/data>
+- <https://www.kaggle.com/competitions/rsna-knee-abnormality-detection/rules>

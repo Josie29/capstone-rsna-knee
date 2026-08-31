@@ -1,18 +1,25 @@
 # Capstone — RSNA Knee Abnormality Detection
 
-Capstone project for the Gauntlet AI program. Entry in the Kaggle competition
+Capstone for the Gauntlet AI program. Entry in the Kaggle competition
 [RSNA Knee Abnormality Detection](https://www.kaggle.com/competitions/rsna-knee-abnormality-detection/overview)
-(2026): detect 12 clinically important abnormalities from multi-planar knee MRI, with
-per-exam radiology reports supplied in ~9–12 languages.
+(2026, $77k, hosted by RSNA).
 
-Verified competition facts, open questions, and sources:
-[docs/competition-notes.md](docs/competition-notes.md).
+**Task:** per-study probability for 12 binary knee-MRI findings — ACL, MCL, medial and
+lateral meniscus, three OA compartments, effusion, synovitis, Baker's cyst, contusion,
+fracture. **Metric:** macro-averaged ROC AUC. **Submission:** Kaggle notebook, ≤9h runtime,
+no internet.
+
+**The interesting part:** only a small subset of training studies carry per-condition
+labels. The rest have to be mined from free-text radiology reports written in a dozen
+languages — and the report field is *not* available at test time.
+
+Full specifics: [docs/competition-notes.md](docs/competition-notes.md).
 
 ## Status
 
 Scaffold only. No data downloaded, no baseline, no submission.
 
-**Deadlines:** entry closes **2026-10-15**, final submission **2026-10-22**.
+**Entry deadline 2026-10-15 · final submission 2026-10-22.**
 
 ## Setup
 
@@ -21,31 +28,33 @@ uv sync --extra data
 uv run scripts/download_data.py
 ```
 
-`download_data.py` needs a Kaggle API token at `~/.kaggle/kaggle.json` (or
-`KAGGLE_USERNAME` / `KAGGLE_KEY`) and the competition rules accepted on the website —
-it will tell you which is missing.
+Needs a Kaggle API token at `~/.kaggle/kaggle.json` (or `KAGGLE_USERNAME`/`KAGGLE_KEY`) and
+the competition rules accepted on the website — the script says which is missing.
 
-Add the heavier extras when you get to modeling:
+Heavier extras once modeling starts:
 
 ```bash
 uv sync --extra data --extra train --extra text
 ```
 
+## Competition data never enters this repo
+
+Rule 2.4.b forbids redistributing Competition Data to anyone who has not accepted the
+rules, and this repo is public. `.gitignore` excludes all of `data/`, `checkpoints/`, and
+`submissions/`. Report text, label CSVs, and fold assignments keyed to `StudyInstanceUID`
+all count as Competition Data.
+
 ## Layout
 
 | Path | What lives here |
 | --- | --- |
-| `src/knee/` | The package. `paths.py` is the single source of truth for where data lives. |
-| `scripts/` | Entry points run from the repo root via `uv run`. |
-| `data/raw/`, `data/interim/` | Gitignored. Redownloadable / regenerable. |
-| `data/processed/` | Committed. Small manifests and folds a grader needs to read. |
-| `notebooks/` | Exploration, and the Kaggle submission notebook once there is one. |
+| `src/knee/labels.py` | The 12 target names in submission-column order. Single source of truth. |
+| `src/knee/paths.py` | Where data lives. `KNEE_DATA_ROOT` overrides; auto-detects Kaggle notebooks. |
+| `scripts/` | Entry points, run from the repo root via `uv run`. |
+| `data/`, `checkpoints/`, `submissions/` | Gitignored. Redownloadable or regenerable. |
+| `notebooks/` | Exploration, plus the Kaggle submission notebook. |
 | `docs/` | Competition notes, tech-stack decisions, brainlift. |
 | `tests/` | pytest. |
-
-Set `KNEE_DATA_ROOT` to move the data and checkpoint directories onto a mounted volume;
-inside a Kaggle notebook the paths resolve to `/kaggle/input` and `/kaggle/working`
-automatically.
 
 ## Checks
 

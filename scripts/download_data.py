@@ -25,11 +25,15 @@ def check_kaggle_cli() -> str:
             "Then run this script through the project venv:  uv run scripts/download_data.py"
         )
 
-    token = Path.home() / ".kaggle" / "kaggle.json"
-    if not token.is_file() and "KAGGLE_USERNAME" not in os.environ:
+    # The CLI accepts either form: the older username/key pair in kaggle.json, or a
+    # bearer token in access_token. Either one is enough; don't demand the legacy file.
+    kaggle_dir = Path.home() / ".kaggle"
+    credential_files = [kaggle_dir / "kaggle.json", kaggle_dir / "access_token"]
+    if not any(f.is_file() for f in credential_files) and "KAGGLE_USERNAME" not in os.environ:
         raise SystemExit(
             f"No Kaggle credentials. Create an API token at "
-            f"https://www.kaggle.com/settings/account and save it to {token}, "
+            f"https://www.kaggle.com/settings/account and save it to one of "
+            f"{', '.join(str(f) for f in credential_files)}, "
             f"or export KAGGLE_USERNAME and KAGGLE_KEY."
         )
 

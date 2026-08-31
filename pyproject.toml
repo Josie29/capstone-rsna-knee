@@ -7,6 +7,9 @@ dependencies = [
     "numpy>=2.1",
     "pandas>=2.2",
     "pydicom>=3.0",
+    # Series ship in a mix of transfer syntaxes (JPEG Lossless, JPEG 2000, and two
+    # uncompressed VRs). pydicom alone decodes only the uncompressed ones.
+    "pylibjpeg[all]>=2.0",
     "pydantic>=2.9",
 ]
 
