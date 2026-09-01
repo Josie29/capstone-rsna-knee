@@ -5,9 +5,10 @@ import numpy as np
 import pandas as pd
 
 from knee.dicom import DicomDecodeError, load_volume
-from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN, SUBMISSION_COLUMNS
+from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN, SUBMISSION_COLUMNS, Label
 from knee.model import LoadedModel, load_model, resolve_device
-from knee.series import best_series_of_type
+from knee.plane_prior import combiner_weights
+from knee.series import SeriesType, best_series_of_type
 
 TEST_SERIES_DIR = "test_series"
 
@@ -37,6 +38,35 @@ def _predict_one(
     except (ValueError, DicomDecodeError) as exc:
         log(f"model {model.series_type}: skipping series {series_uid}: {exc}")
         return np.full(len(LABEL_COLUMNS), np.nan)
+
+
+def merge_predictions(per_model: np.ndarray, series_types: list[SeriesType]) -> np.ndarray:
+    """Merge per-model probability rows into one study row via the clinical plane prior.
+
+    Each label is a weighted average over the models that ran (non-NaN rows), with
+    `combiner_weights` giving the plane of choice for that finding the larger say —
+    interim fixed weights until learned ones exist (DECISIONS.md #3). A study no
+    model could read gets the sample-submission constant, never NaN.
+
+    Args:
+        per_model: (n_models, 12) probabilities; a model that sat out is a NaN row.
+        series_types: Series type per row of `per_model`.
+
+    Returns:
+        (12,) merged probabilities in `LABEL_COLUMNS` order.
+    """
+    present = [index for index, row in enumerate(per_model) if not np.isnan(row).all()]
+    if not present:
+        return np.full(len(LABEL_COLUMNS), _FALLBACK_PROBABILITY)
+    present_types = [series_types[index] for index in present]
+    merged = np.empty(len(LABEL_COLUMNS))
+    for column, label in enumerate(Label):
+        weights = combiner_weights(present_types, label)
+        merged[column] = sum(
+            weight * per_model[index][column]
+            for weight, index in zip(weights, present, strict=True)
+        )
+    return merged
 
 
 def predict_studies(
@@ -90,11 +120,7 @@ def predict_studies(
         )
         if np.isnan(per_model).all():
             log(f"no model could read study {study_uid}; emitting {_FALLBACK_PROBABILITY}")
-            merged = np.full(len(LABEL_COLUMNS), _FALLBACK_PROBABILITY)
-        else:
-            # NaN-aware mean = renormalize over the models that ran for this study.
-            merged = np.nanmean(per_model, axis=0)
-        rows.append([study_uid, *merged.tolist()])
+        rows.append([study_uid, *merge_predictions(per_model, types).tolist()])
         if position % 100 == 0:
             log(f"predicted {position}/{len(test_df)}")
 
