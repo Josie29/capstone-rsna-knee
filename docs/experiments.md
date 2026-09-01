@@ -6,7 +6,10 @@ why, and what we decided. Aggregate metrics only — no report text, labels, or
 StudyInstanceUIDs (Competition Data, rule 2.4.b).
 
 Eval protocol note: scores are only comparable within the same protocol. A protocol
-change starts a new comparison regime — mark it clearly.
+change starts a new comparison regime — mark it clearly. `gold58-cv` = pooled
+out-of-fold stratified 5-fold x 5-repeat CV of the full ensemble on the gold studies,
+seed 0 (`src/knee/cv_gold.py`, DECISIONS.md #4); Val AUC cells report its macro mean,
+with the per-repeat spread in the log entry when it matters.
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|

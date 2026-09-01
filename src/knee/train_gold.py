@@ -42,7 +42,7 @@ class GoldTrainResult(BaseModel):
     checkpoint_path: Path
 
 
-def _fit_head(head: nn.Linear, features: torch.Tensor, targets: torch.Tensor) -> None:
+def fit_head(head: nn.Linear, features: torch.Tensor, targets: torch.Tensor) -> None:
     """Train the linear head on cached study features.
 
     Valid only because the backbone is frozen: `model(volume)` equals
@@ -157,7 +157,7 @@ def train_gold(
     targets = torch.from_numpy(labels)  # pyright: ignore[reportUnknownMemberType]
 
     model.to("cpu")  # head training on cached features is trivial; keep it simple
-    _fit_head(model.head, features, targets)
+    fit_head(model.head, features, targets)
 
     with torch.no_grad():
         probabilities = torch.sigmoid(model.head(features)).numpy()
