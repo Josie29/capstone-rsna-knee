@@ -14,9 +14,14 @@ that wire config, paths, and secrets together.
 The repo is the source of truth — never edit kernels in the Kaggle web UI. Deploy with:
 
 ```bash
+uv run python scripts/normalize_notebooks.py  # canonical nbformat, else Kaggle renders raw JSON
 kaggle kernels push -p notebooks/kaggle/train
 kaggle kernels push -p notebooks/kaggle/inference
 ```
+
+Normalization matters because programmatic cell edits leave `source` as one string;
+Jupyter executes that fine, but Kaggle's viewer shows the whole file as raw JSON
+(train kernel v6 is an example of the failure mode).
 
 Each folder's `kernel-metadata.json` pins the environment: kernel slug, GPU, internet,
 and which datasets are attached. Replace `KAGGLE_USERNAME` with the real username before
