@@ -1,6 +1,13 @@
+from pathlib import Path
+
 import pandas as pd
 
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
+
+# Per-label companion columns in the blended-labels CSV (see
+# docs/modeling understanding/blended-labels-methodology.md). Validated present but
+# not yet consumed: tier-weighted training is a separate experiment.
+_BLENDED_COMPANION_SUFFIXES = ("__weight", "__tier")
 
 
 def gold_studies(train_df: pd.DataFrame) -> pd.DataFrame:
@@ -40,3 +47,50 @@ def gold_studies(train_df: pd.DataFrame) -> pd.DataFrame:
 
     gold[label_columns] = values.astype(int)
     return gold
+
+
+def load_blended_labels(csv_path: Path) -> pd.DataFrame:
+    """Load the blended (report-mined) soft labels for every train study.
+
+    The CSV carries, per label, a probability estimate plus `__weight`/`__tier`
+    companion columns describing how the estimate was produced. The companions are
+    validated present (so a truncated export fails loudly) but dropped: the current
+    experiment trains on the probabilities alone, and tier-weighted loss is a later,
+    separate lever.
+
+    Args:
+        csv_path: Path to `blended_labels_v1.csv` (locally under `data/processed/`,
+            on Kaggle under the mounted `knee-labels` dataset).
+
+    Returns:
+        One row per study: `StudyInstanceUID` plus the 12 label columns as float32
+        probabilities in [0, 1].
+
+    Raises:
+        ValueError: If a label or companion column is missing, a study UID repeats,
+            or a probability is NaN or outside [0, 1] — any of which means the
+            blended-labels contract changed and training on the file is unsafe.
+    """
+    frame = pd.read_csv(csv_path)
+    label_columns = list(LABEL_COLUMNS)
+
+    expected = [STUDY_ID_COLUMN] + [
+        f"{label}{suffix}" for label in label_columns for suffix in ("", *_BLENDED_COMPANION_SUFFIXES)
+    ]
+    missing = [column for column in expected if column not in frame.columns]
+    if missing:
+        raise ValueError(f"{csv_path.name} is missing expected columns: {missing}")
+
+    if frame[STUDY_ID_COLUMN].duplicated().any():
+        duplicated = frame[STUDY_ID_COLUMN][frame[STUDY_ID_COLUMN].duplicated()]
+        raise ValueError(f"{csv_path.name} has duplicate study UIDs: {len(duplicated)} rows")
+
+    probabilities = frame[label_columns]
+    if probabilities.isna().any().any():
+        raise ValueError(f"{csv_path.name} has NaN probabilities")
+    if ((probabilities < 0) | (probabilities > 1)).any().any():
+        raise ValueError(f"{csv_path.name} has probabilities outside [0, 1]")
+
+    blended = frame[[STUDY_ID_COLUMN, *label_columns]].copy()
+    blended[label_columns] = probabilities.astype("float32")
+    return blended

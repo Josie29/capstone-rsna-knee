@@ -4,6 +4,9 @@ import pandas as pd
 
 from knee.labels import AnatomicalPlane
 
+# Directory under the competition root holding <StudyUID>/<SeriesUID>/*.dcm.
+TRAIN_SERIES_DIR = "train_series"
+
 # Column names in train_series.csv / test_series.csv.
 SERIES_ID_COLUMN = "SeriesInstanceUID"
 PLANE_COLUMN = "Anatomical_Plane"
