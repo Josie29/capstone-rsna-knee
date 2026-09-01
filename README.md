@@ -28,8 +28,10 @@ uv sync --extra data
 uv run scripts/download_data.py
 ```
 
-Needs a Kaggle API token at `~/.kaggle/kaggle.json` (or `KAGGLE_USERNAME`/`KAGGLE_KEY`) and
-the competition rules accepted on the website — the script says which is missing.
+Needs Kaggle auth — `uv run kaggle auth login` (browser flow) is the easy path; a personal
+token from Settings → API tokens (as `~/.kaggle/kaggle.json` or `KAGGLE_USERNAME`/`KAGGLE_KEY`)
+works for headless use — plus the competition rules accepted on the website. The script says
+which is missing.
 
 Heavier extras once modeling starts:
 

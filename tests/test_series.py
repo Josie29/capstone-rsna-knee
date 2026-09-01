@@ -8,6 +8,7 @@ from knee.series import (
     PLANE_COLUMN,
     SERIES_ID_COLUMN,
     SeriesType,
+    best_series_of_type,
     classify_series,
     select_series,
 )
@@ -114,3 +115,34 @@ def test_empty_study_is_rejected() -> None:
     confusing IndexError instead of a clear message."""
     with pytest.raises(ValueError, match="no series rows"):
         select_series(_series_frame([]))
+
+
+def test_best_series_of_type_matches_exact_type_only() -> None:
+    """Catches a fallback cascade sneaking into the per-type picker — a specialist
+    model fed a substitute type reads its contrast backwards, which is worse than
+    sitting out of the ensemble."""
+    frame = _series_frame(
+        [
+            ("uid_sag_fluid", "Sagittal", 1, 1),
+            ("uid_cor_plain", "Coronal", 0, 0),
+        ]
+    )
+    assert best_series_of_type(frame, SeriesType.SAGITTAL_FLUID) == "uid_sag_fluid"
+    assert best_series_of_type(frame, SeriesType.CORONAL_FLUID) is None
+    assert best_series_of_type(frame, SeriesType.CORONAL_NONFLUID) == "uid_cor_plain"
+
+
+def test_best_series_of_type_breaks_duplicate_ties_deterministically() -> None:
+    """Catches nondeterministic picks among duplicate series of a type (1,166
+    study-plane pairs in train carry fluid duplicates) — same study, different input
+    across runs would make experiments incomparable."""
+    frame = _series_frame(
+        [
+            ("uid_b_trainlike", "Axial", 1, 1),
+            ("uid_a_diverged", "Axial", 1, 0),
+            ("uid_a_trainlike", "Axial", 1, 1),
+        ]
+    )
+    # Train-like flags beat UID order; among train-like, smallest UID wins.
+    assert best_series_of_type(frame, SeriesType.AXIAL_FLUID) == "uid_a_trainlike"
+    assert best_series_of_type(frame.iloc[::-1], SeriesType.AXIAL_FLUID) == "uid_a_trainlike"

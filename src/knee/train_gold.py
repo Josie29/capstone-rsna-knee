@@ -15,7 +15,7 @@ from knee.data import gold_studies
 from knee.dicom import DicomDecodeError, load_volume
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 from knee.model import KneeModel, save_model
-from knee.series import select_series
+from knee.series import SeriesType, best_series_of_type
 
 TRAIN_SERIES_DIR = "train_series"
 
@@ -33,6 +33,7 @@ class SkippedStudy(BaseModel):
 class GoldTrainResult(BaseModel):
     """Outcome of a gold-58 training run."""
 
+    series_type: SeriesType
     n_studies: int
     skipped: list[SkippedStudy]
     # In-sample only: the head trains on all rows, so these say "the features carry
@@ -86,22 +87,25 @@ def train_gold(
     comp_root: Path,
     out_path: Path,
     *,
+    series_type: SeriesType = SeriesType.SAGITTAL_FLUID,
     model: KneeModel | None = None,
     input_size: int = 224,
     log: Callable[[str], None] = print,
 ) -> GoldTrainResult:
-    """Train the prototype on the fully-labeled gold studies.
+    """Train one per-type prototype on the fully-labeled gold studies.
 
-    The vertical-slice trainer for issue #6: one `KneeModel` with the backbone frozen
-    and only the linear head trained — all gold studies used for fitting (no
-    validation; n=58 cannot support one). The checkpoint is named for
-    `pipe_check_gold58` and must never be evaluated against the gold studies.
+    One `KneeModel` specialized to `series_type`, backbone frozen, only the linear
+    head trained — all gold studies used for fitting (no validation; n=58 cannot
+    support one). Studies without a series of the type are skipped, never substituted
+    (the strict-typing rule from DECISIONS.md). Checkpoints are `pipe_check_gold58`
+    prototypes and must never be evaluated against the gold studies.
 
     Args:
         comp_root: Competition data root containing `train.csv`, `train_series.csv`,
             and `train_series/` (on Kaggle:
             `/kaggle/input/rsna-knee-abnormality-detection`).
         out_path: Where to write the .pt checkpoint.
+        series_type: The one series type this model trains on and will consume.
         model: Model to train; a fresh pretrained `KneeModel` when omitted.
         input_size: Slice resize target fed to `load_volume`.
         log: Progress sink (`print` in notebooks).
@@ -132,7 +136,9 @@ def train_gold(
         study_uid = str(row[STUDY_ID_COLUMN])
         study_series = series_df[series_df[STUDY_ID_COLUMN] == study_uid]
         try:
-            series_uid = select_series(study_series)
+            series_uid = best_series_of_type(study_series, series_type)
+            if series_uid is None:
+                raise ValueError(f"no {series_type} series")
             volume = load_volume(comp_root / TRAIN_SERIES_DIR / study_uid / series_uid, size=input_size)
             with torch.no_grad():  # backbone is frozen; cache features once
                 study_features = model.pool_features(volume.to(device)).cpu()
@@ -156,10 +162,11 @@ def train_gold(
     with torch.no_grad():
         probabilities = torch.sigmoid(model.head(features)).numpy()
 
-    save_model(model, out_path, input_size=input_size)
+    save_model(model, out_path, input_size=input_size, series_type=series_type)
     log(f"checkpoint -> {out_path}")
 
     return GoldTrainResult(
+        series_type=series_type,
         n_studies=len(samples),
         skipped=skipped,
         in_sample_auc=_in_sample_auc(labels, probabilities),

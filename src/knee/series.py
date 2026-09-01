@@ -110,3 +110,38 @@ def select_series(study_series: pd.DataFrame) -> str:
 
     best = min((row for _, row in study_series.iterrows()), key=preference)
     return str(best[SERIES_ID_COLUMN])
+
+
+def best_series_of_type(study_series: pd.DataFrame, series_type: SeriesType) -> str | None:
+    """Pick the best series of exactly one type, or None if the study has none.
+
+    The per-type-model counterpart to `select_series`: a specialist model must only
+    ever see its native series type, so there is deliberately no fallback cascade —
+    a missing type means "skip this model for this study", never "substitute a
+    different type" (a fluid-trained model reads non-fluid contrast backwards).
+    Ties break the same way as `select_series`: train-like flag combos first, then
+    lexicographic UID.
+
+    Args:
+        study_series: Rows of train_series.csv/test_series.csv for ONE study.
+        series_type: The exact type the calling model consumes.
+
+    Returns:
+        The chosen SeriesInstanceUID, or None when no series of that type exists.
+
+    Raises:
+        ValueError: If a row carries an unknown plane (via `classify_series`).
+    """
+    candidates = [
+        row
+        for _, row in study_series.iterrows()
+        if classify_series(row[PLANE_COLUMN], row[FLUID_SENSITIVE_COLUMN]) == series_type
+    ]
+    if not candidates:
+        return None
+
+    def preference(row: pd.Series) -> tuple[bool, str]:
+        flags_diverge = bool(row[FAT_SUPPRESSION_COLUMN] != row[FLUID_SENSITIVE_COLUMN])
+        return flags_diverge, str(row[SERIES_ID_COLUMN])
+
+    return str(min(candidates, key=preference)[SERIES_ID_COLUMN])
