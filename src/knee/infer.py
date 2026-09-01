@@ -3,11 +3,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import torch
 
 from knee.dicom import DicomDecodeError, load_volume
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN, SUBMISSION_COLUMNS
-from knee.model import LoadedModel, load_model
+from knee.model import LoadedModel, load_model, resolve_device
 from knee.series import best_series_of_type
 
 TEST_SERIES_DIR = "test_series"
@@ -74,7 +73,7 @@ def predict_studies(
     if len(set(types)) != len(types):
         raise ValueError(f"Duplicate series types across checkpoints: {types}")
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = resolve_device()
     for loaded in models:
         loaded.model.to(device)
     log(f"{len(models)} models ({[t.value for t in types]}) on {device}")
