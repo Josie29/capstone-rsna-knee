@@ -132,7 +132,15 @@ class LoadedModel(BaseModel):
     series_type: SeriesType
 
 
-def save_model(model: KneeModel, path: Path, *, input_size: int, series_type: SeriesType) -> None:
+def save_model(
+    model: KneeModel,
+    path: Path,
+    *,
+    input_size: int,
+    series_type: SeriesType,
+    label_source: str = "unspecified",
+    n_studies: int = 0,
+) -> None:
     """Write the full model (backbone + head weights) plus reproduction metadata.
 
     The whole state dict is saved — not just the head — because the submission
@@ -144,6 +152,10 @@ def save_model(model: KneeModel, path: Path, *, input_size: int, series_type: Se
         input_size: The slice resize target the model was trained with.
         series_type: The series type the model was trained on; stored so inference
             routes the right series to it without filename conventions.
+        label_source: Which label set trained this checkpoint (e.g. "gold58",
+            "blended_v1") — without it, checkpoints from different label regimes are
+            byte-for-byte indistinguishable.
+        n_studies: Number of studies the head actually trained on.
     """
     torch.save(
         {
@@ -152,6 +164,8 @@ def save_model(model: KneeModel, path: Path, *, input_size: int, series_type: Se
             "input_size": input_size,
             "series_type": series_type.value,
             "label_columns": list(LABEL_COLUMNS),
+            "label_source": label_source,
+            "n_studies": n_studies,
         },
         path,
     )

@@ -17,3 +17,12 @@
    the error bar. This is what the experiments.md Val AUC column means. It ranks
    levers locally before spending a submission — the public LB stays the arbiter, and
    at n=58 only deltas well outside the repeat spread count as signal.
+5. Gold-58 is retired as a special set (E003 onward). Training uses all 4,407 studies
+   with the blended soft labels as-is — the 58 gold rows keep their blended values,
+   no override, no holdout — and the #4 CV protocol generalizes to the full blended
+   pool (`blended-cv`, src/knee/cv.py: heads fit on soft labels; stratification and
+   AUC use labels thresholded at 0.5). Consequence accepted with eyes open: local CV
+   now measures agreement with the report miner, not ground truth, so the public LB
+   remains the truth check and the miner's quality (report-mining lever) caps what
+   local numbers can mean. Checkpoints embed `label_source` so gold-era and
+   blended-era weights can't be confused.

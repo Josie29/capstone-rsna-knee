@@ -1,5 +1,6 @@
 import math
 from collections.abc import Callable, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -11,29 +12,36 @@ from pydantic import BaseModel, ConfigDict
 from sklearn.metrics import roc_auc_score  # pyright: ignore[reportUnknownVariableType]
 from torch import nn
 
-from knee.data import gold_studies
 from knee.dicom import DicomDecodeError, load_volume
+from knee.fitting import fit_head
 from knee.infer import merge_predictions
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 from knee.model import KneeModel, resolve_device
-from knee.series import SeriesType, best_series_of_type
-from knee.train_gold import TRAIN_SERIES_DIR, fit_head
+from knee.series import TRAIN_SERIES_DIR, SeriesType, best_series_of_type
 
-# The three fluid specialists of the current ensemble (E001/E002).
+# The three fluid specialists of the current ensemble (E001/E002/E003).
 DEFAULT_CV_SERIES_TYPES: tuple[SeriesType, ...] = (
     SeriesType.SAGITTAL_FLUID,
     SeriesType.CORONAL_FLUID,
     SeriesType.AXIAL_FLUID,
 )
 
+# Soft labels are binarized at this threshold wherever a binary quantity is needed
+# (stratification, AUC). Training always uses the un-thresholded probabilities.
+EVAL_THRESHOLD = 0.5
 
-class GoldFeatureBank(BaseModel):
-    """Cached per-plane study features for the gold set.
+# DICOM decode is CPU-bound and serial per slice; pylibjpeg's C decoders release the
+# GIL, so threads genuinely parallelize it across the machine's cores.
+_DECODE_WORKERS = 4
 
-    Extract once, cross-validate many times: the backbone is frozen, so features are
-    a pure function of the pixels and stay valid across fold counts, seeds, and
-    repeats. One shared backbone serves every plane — equivalent to the per-plane
-    models in `train_gold` because each of those starts from the same ImageNet
+
+class FeatureBank(BaseModel):
+    """Cached per-plane study features for a labeled study set.
+
+    Extract once, train/cross-validate many times: the backbone is frozen, so
+    features are a pure function of the pixels and stay valid across fold counts,
+    seeds, and repeats. One shared backbone serves every plane — equivalent to the
+    per-plane models in training because each of those starts from the same ImageNet
     weights and never trains its backbone.
     """
 
@@ -42,6 +50,7 @@ class GoldFeatureBank(BaseModel):
     series_types: list[SeriesType]
     study_uids: list[str]
     # (n_studies, 12) float32 in LABEL_COLUMNS order, aligned with study_uids.
+    # Hard 0/1 for gold labels, probabilities in [0, 1] for blended labels.
     labels: np.ndarray
     # Per plane, aligned with study_uids; None where the study lacks the plane or its
     # series failed to decode — the plane "sits out" for that study, as in inference.
@@ -55,8 +64,8 @@ class GoldFeatureBank(BaseModel):
         }
 
 
-class GoldCVResult(BaseModel):
-    """Pooled out-of-fold (OOF) cross-validation metrics on the gold studies."""
+class CVResult(BaseModel):
+    """Pooled out-of-fold (OOF) cross-validation metrics."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -66,7 +75,7 @@ class GoldCVResult(BaseModel):
     seed: int
     series_types: list[SeriesType]
     plane_coverage: dict[SeriesType, int]
-    # Mean across repeats; NaN where the gold labels carry a single class.
+    # Mean across repeats; NaN where the thresholded labels carry a single class.
     per_label_auc: dict[str, float]
     # Mean across repeats of the per-repeat macro (labels with defined AUC only).
     macro_auc: float
@@ -76,23 +85,28 @@ class GoldCVResult(BaseModel):
     oof_probabilities: np.ndarray
 
 
-def collect_gold_features(
+def collect_features(
     comp_root: Path,
+    labels: pd.DataFrame,
     *,
     series_types: Sequence[SeriesType] = DEFAULT_CV_SERIES_TYPES,
     model: KneeModel | None = None,
     input_size: int = 224,
     log: Callable[[str], None] = print,
-) -> GoldFeatureBank:
-    """Decode every gold study once per plane and cache pooled backbone features.
+) -> FeatureBank:
+    """Decode every labeled study once per plane and cache pooled backbone features.
 
-    Every gold study is kept, even when no plane decodes — at CV time such a study
+    Every study is kept, even when no plane decodes — at CV time such a study
     receives the same fallback constant the submission would, so the local metric
-    measures exactly the pipeline that gets scored.
+    measures exactly the pipeline that gets scored. Decodes run on a small thread
+    pool with one-study lookahead (the `predict_studies` pattern) so CPU decode
+    overlaps the backbone forwards.
 
     Args:
-        comp_root: Competition data root containing `train.csv`, `train_series.csv`,
-            and `train_series/`.
+        comp_root: Competition data root containing `train_series.csv` and
+            `train_series/`.
+        labels: One row per study: `StudyInstanceUID` plus the 12 label columns as
+            floats — `gold_studies` or `load_blended_labels` output.
         series_types: The ensemble's planes, one feature column each.
         model: Feature extractor; a fresh pretrained `KneeModel` when omitted. Only
             its frozen backbone is used — the head is never touched.
@@ -107,14 +121,21 @@ def collect_gold_features(
             plane would be double-weighted by the combiner at CV time).
     """
     if not series_types:
-        raise ValueError("collect_gold_features needs at least one series type")
+        raise ValueError("collect_features needs at least one series type")
     if len(set(series_types)) != len(series_types):
         raise ValueError(f"Duplicate series types: {list(series_types)}")
 
-    train_df = pd.read_csv(comp_root / "train.csv")
     series_df = pd.read_csv(comp_root / "train_series.csv")
-    gold = gold_studies(train_df)
-    log(f"{len(gold)} gold studies, planes {[t.value for t in series_types]}")
+    # One dict lookup per study instead of a full-frame boolean scan (24k rows x 4.4k
+    # studies would dominate the loop's Python time).
+    series_groups: dict[str, pd.DataFrame] = {
+        str(uid): group for uid, group in series_df.groupby(STUDY_ID_COLUMN)
+    }
+    no_series = series_df.iloc[0:0]
+
+    study_uids = [str(uid) for uid in labels[STUDY_ID_COLUMN]]
+    label_matrix = labels[list(LABEL_COLUMNS)].to_numpy(dtype=np.float32)
+    log(f"{len(study_uids)} studies, planes {[t.value for t in series_types]}")
 
     model = model or KneeModel()
     model.freeze_backbone()
@@ -122,34 +143,82 @@ def collect_gold_features(
     model.to(device)
     model.eval()
 
-    study_uids: list[str] = []
-    label_rows: list[np.ndarray] = []
     features: dict[SeriesType, list[torch.Tensor | None]] = {t: [] for t in series_types}
-    for position, (_, row) in enumerate(gold.iterrows(), start=1):
-        study_uid = str(row[STUDY_ID_COLUMN])
-        study_series = series_df[series_df[STUDY_ID_COLUMN] == study_uid]
-        study_uids.append(study_uid)
-        label_rows.append(row[list(LABEL_COLUMNS)].to_numpy(dtype=np.float32))
-        for series_type in series_types:
-            series_uid = best_series_of_type(study_series, series_type)
-            if series_uid is None:
-                features[series_type].append(None)
-                continue
-            try:
-                volume = load_volume(comp_root / TRAIN_SERIES_DIR / study_uid / series_uid, size=input_size)
+
+    def decode(position: int, series_type: SeriesType) -> torch.Tensor | None:
+        """The chosen series' volume, or None when the plane sits out for this study."""
+        study_uid = study_uids[position]
+        series_uid = best_series_of_type(series_groups.get(study_uid, no_series), series_type)
+        if series_uid is None:
+            return None
+        try:
+            return load_volume(comp_root / TRAIN_SERIES_DIR / study_uid / series_uid, size=input_size)
+        except (ValueError, DicomDecodeError) as exc:
+            log(f"{series_type}: skipping series of study {position + 1}: {exc}")
+            return None
+
+    with ThreadPoolExecutor(max_workers=_DECODE_WORKERS) as executor:
+
+        def submit_decodes(position: int) -> list[Future[torch.Tensor | None]]:
+            return [executor.submit(decode, position, t) for t in series_types]
+
+        pending = submit_decodes(0) if study_uids else []
+        for position in range(len(study_uids)):
+            volumes = [future.result() for future in pending]
+            if position + 1 < len(study_uids):
+                # Queue the next study's decodes so they overlap the forwards below.
+                pending = submit_decodes(position + 1)
+            for series_type, volume in zip(series_types, volumes, strict=True):
+                if volume is None:
+                    features[series_type].append(None)
+                    continue
                 with torch.no_grad():  # backbone is frozen; cache features once
                     features[series_type].append(model.pool_features(volume.to(device)).cpu())
-            except (ValueError, DicomDecodeError) as exc:
-                features[series_type].append(None)
-                log(f"{series_type}: skipping series of study {position}: {exc}")
-        if position % 10 == 0:
-            log(f"extracted {position}/{len(gold)}")
+            if (position + 1) % 10 == 0:
+                log(f"extracted {position + 1}/{len(study_uids)}")
 
-    return GoldFeatureBank(
+    return FeatureBank(
         series_types=list(series_types),
         study_uids=study_uids,
-        labels=np.stack(label_rows),
+        labels=label_matrix,
         features=features,
+    )
+
+
+def save_feature_bank(bank: FeatureBank, path: Path) -> None:
+    """Persist a feature bank so head training/CV can rerun without any decoding.
+
+    Args:
+        bank: The bank to save.
+        path: Destination .pt file.
+    """
+    torch.save(
+        {
+            "series_types": [t.value for t in bank.series_types],
+            "study_uids": bank.study_uids,
+            "labels": torch.from_numpy(bank.labels),  # pyright: ignore[reportUnknownMemberType]
+            "features": {t.value: bank.features[t] for t in bank.series_types},
+        },
+        path,
+    )
+
+
+def load_feature_bank(path: Path) -> FeatureBank:
+    """Rebuild a feature bank saved by `save_feature_bank`.
+
+    Args:
+        path: The .pt file.
+
+    Returns:
+        The bank, with the same study alignment it was saved with.
+    """
+    payload = torch.load(path, map_location="cpu", weights_only=True)
+    series_types = [SeriesType(value) for value in payload["series_types"]]
+    return FeatureBank(
+        series_types=series_types,
+        study_uids=[str(uid) for uid in payload["study_uids"]],
+        labels=payload["labels"].numpy(),
+        features={t: list(payload["features"][t.value]) for t in series_types},
     )
 
 
@@ -163,7 +232,8 @@ def _stratified_fold_assignments(labels: np.ndarray, n_splits: int, rng: np.rand
     label wherever counts allow.
 
     Args:
-        labels: (n_studies, n_labels) 0/1 array.
+        labels: (n_studies, n_labels) 0/1 array — soft labels must be thresholded by
+            the caller first.
         n_splits: Number of folds; fold sizes differ by at most one.
         rng: Source of shuffling; fixes the assignment for a given seed.
 
@@ -193,13 +263,13 @@ def _stratified_fold_assignments(labels: np.ndarray, n_splits: int, rng: np.rand
     return assignment
 
 
-def _oof_predictions(bank: GoldFeatureBank, assignment: np.ndarray, head_seed: int) -> np.ndarray:
+def _oof_predictions(bank: FeatureBank, assignment: np.ndarray, head_seed: int) -> np.ndarray:
     """One repeat's pooled OOF matrix: per fold, fit fresh heads and predict held-out.
 
     Mirrors the production pipeline exactly: per-plane linear heads trained with
-    `fit_head` (as in `train_gold`), merged with `merge_predictions` (as in
-    `predict_studies`) — including plane sit-outs and the 0.5 fallback for studies
-    no plane could read.
+    `fit_head` on the bank's (possibly soft) labels, merged with `merge_predictions`
+    (as in `predict_studies`) — including plane sit-outs and the 0.5 fallback for
+    studies no plane could read.
     """
     n_studies = bank.labels.shape[0]
     targets = torch.from_numpy(bank.labels)  # pyright: ignore[reportUnknownMemberType]
@@ -232,26 +302,31 @@ def _oof_predictions(bank: GoldFeatureBank, assignment: np.ndarray, head_seed: i
     return oof
 
 
-def cross_validate_gold(
-    bank: GoldFeatureBank,
+def cross_validate(
+    bank: FeatureBank,
     *,
     n_splits: int = 5,
     n_repeats: int = 5,
     seed: int = 0,
     log: Callable[[str], None] = print,
-) -> GoldCVResult:
-    """Pooled-OOF stratified k-fold CV of the full ensemble on the gold studies.
+) -> CVResult:
+    """Pooled-OOF stratified k-fold CV of the full ensemble on the bank's studies.
 
     Per fold, fresh per-plane heads train on the fold's training studies and the
     production combiner merges their held-out predictions; each study's OOF row thus
-    comes from models that never saw it. AUC is computed once over all pooled OOF
-    rows — per-fold AUC at n≈12 held-out studies is undefined or hopelessly noisy
-    for rare labels. Repeats re-run the whole procedure with reshuffled folds; the
-    spread of the per-repeat macro is the error bar to read the mean against.
+    comes from models that never saw it. Heads fit on the bank's labels as-is (soft
+    probabilities stay soft); stratification and AUC use the labels thresholded at
+    `EVAL_THRESHOLD`, since both need a binary quantity. AUC is computed once over
+    all pooled OOF rows; repeats re-run the whole procedure with reshuffled folds —
+    the spread of the per-repeat macro is the error bar to read the mean against.
+
+    When the bank's labels are miner-derived (blended), the resulting AUC measures
+    agreement with the report miner, not ground truth — a consistent model-selection
+    signal, with the leaderboard as the truth check.
 
     Args:
-        bank: Cached features from `collect_gold_features`.
-        n_splits: Fold count; 5 keeps ≈46 training studies per fold at n=58.
+        bank: Cached features from `collect_features` (or `load_feature_bank`).
+        n_splits: Fold count.
         n_repeats: Independent repetitions with reshuffled folds.
         seed: Base seed; fold shuffling and head init derive from it, so results are
             reproducible for a given bank.
@@ -269,19 +344,20 @@ def cross_validate_gold(
     if n_repeats < 1:
         raise ValueError(f"n_repeats must be >= 1, got {n_repeats}")
 
-    # A label with a single class in the gold set has no defined AUC anywhere.
-    defined = [c for c in range(len(LABEL_COLUMNS)) if len(np.unique(bank.labels[:, c])) == 2]
+    binary = (bank.labels >= EVAL_THRESHOLD).astype(np.float32)
+    # A label with a single thresholded class has no defined AUC anywhere.
+    defined = [c for c in range(len(LABEL_COLUMNS)) if len(np.unique(binary[:, c])) == 2]
 
     oof_stack: list[np.ndarray] = []
     per_repeat_label_auc = np.full((n_repeats, len(LABEL_COLUMNS)), np.nan)
     macro_per_repeat: list[float] = []
     for repeat in range(n_repeats):
         rng = np.random.default_rng(seed + repeat)
-        assignment = _stratified_fold_assignments(bank.labels, n_splits, rng)
+        assignment = _stratified_fold_assignments(binary, n_splits, rng)
         oof = _oof_predictions(bank, assignment, head_seed=seed + repeat)
         oof_stack.append(oof)
         for column in defined:
-            score = roc_auc_score(bank.labels[:, column], oof[:, column])  # pyright: ignore[reportUnknownArgumentType, reportUnknownVariableType]
+            score = roc_auc_score(binary[:, column], oof[:, column])  # pyright: ignore[reportUnknownArgumentType, reportUnknownVariableType]
             per_repeat_label_auc[repeat, column] = float(score)  # pyright: ignore[reportUnknownArgumentType]
         macro = float(per_repeat_label_auc[repeat, defined].mean())
         macro_per_repeat.append(macro)
@@ -291,7 +367,7 @@ def cross_validate_gold(
         label: float(per_repeat_label_auc[:, column].mean()) if column in defined else math.nan
         for column, label in enumerate(LABEL_COLUMNS)
     }
-    return GoldCVResult(
+    return CVResult(
         n_studies=n_studies,
         n_splits=n_splits,
         n_repeats=n_repeats,

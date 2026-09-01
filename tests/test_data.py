@@ -1,9 +1,10 @@
 from collections.abc import Sequence
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from knee.data import gold_studies
+from knee.data import gold_studies, load_blended_labels
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 
 
@@ -38,3 +39,61 @@ def test_missing_label_column_is_rejected() -> None:
     frame = _frame([[1.0] + [0.0] * 11]).drop(columns=[LABEL_COLUMNS[0]])
     with pytest.raises(ValueError, match="missing expected columns"):
         gold_studies(frame)
+
+
+def _write_blended_csv(path: Path, probabilities: Sequence[Sequence[float]]) -> pd.DataFrame:
+    """Blended-labels CSV with the prob/__weight/__tier triplet per label."""
+    frame = pd.DataFrame({STUDY_ID_COLUMN: [f"uid{i}" for i in range(len(probabilities))]})
+    for column, label in enumerate(LABEL_COLUMNS):
+        frame[label] = [row[column] for row in probabilities]
+        frame[f"{label}__weight"] = 1.0
+        frame[f"{label}__tier"] = 1
+    frame.to_csv(path, index=False)
+    return frame
+
+
+def test_blended_labels_keep_soft_values(tmp_path: Path) -> None:
+    """Catches the loader rounding or coercing probabilities to 0/1 — the whole point
+    of the blended labels is that the trainer sees the miner's soft estimates."""
+    csv_path = tmp_path / "blended.csv"
+    _write_blended_csv(csv_path, [[0.9123] + [0.0372] * 11, [0.5] * 12])
+
+    blended = load_blended_labels(csv_path)
+
+    assert list(blended.columns) == [STUDY_ID_COLUMN, *LABEL_COLUMNS]
+    assert all(str(dtype) == "float32" for dtype in blended[list(LABEL_COLUMNS)].dtypes)
+    assert blended.loc[0, LABEL_COLUMNS[0]] == pytest.approx(0.9123)
+
+
+def test_blended_labels_missing_companion_column_is_rejected(tmp_path: Path) -> None:
+    """Catches a truncated export (e.g. the values-only variant) sneaking in — training
+    would proceed but the tier/weight columns the methodology promises would be gone,
+    and the later weighted-training experiment would silently have nothing to use."""
+    csv_path = tmp_path / "blended.csv"
+    frame = _write_blended_csv(csv_path, [[0.5] * 12])
+    frame.drop(columns=[f"{LABEL_COLUMNS[0]}__tier"]).to_csv(csv_path, index=False)
+
+    with pytest.raises(ValueError, match="missing expected columns"):
+        load_blended_labels(csv_path)
+
+
+def test_blended_labels_out_of_range_probability_is_rejected(tmp_path: Path) -> None:
+    """Catches a labels re-export switching to logits or percentages — training on
+    those as probabilities would corrupt every head silently."""
+    csv_path = tmp_path / "blended.csv"
+    _write_blended_csv(csv_path, [[1.5] + [0.5] * 11])
+
+    with pytest.raises(ValueError, match="outside"):
+        load_blended_labels(csv_path)
+
+
+def test_blended_labels_duplicate_uid_is_rejected(tmp_path: Path) -> None:
+    """Catches a bad join upstream duplicating studies — duplicated rows would
+    double-weight those studies in training and skew CV fold assignment."""
+    csv_path = tmp_path / "blended.csv"
+    frame = _write_blended_csv(csv_path, [[0.5] * 12, [0.5] * 12])
+    frame[STUDY_ID_COLUMN] = "uid0"
+    frame.to_csv(csv_path, index=False)
+
+    with pytest.raises(ValueError, match="duplicate"):
+        load_blended_labels(csv_path)
