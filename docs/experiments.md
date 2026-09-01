@@ -10,14 +10,14 @@ change starts a new comparison regime — mark it clearly.
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
-| E000-constant-priors | — | none | all 0.5 (sample_submission equivalent) | LB only | — | — | — | issue #6 |
+| E000-constant-priors | 2026-09-01 | none | all 0.5 (sample_submission equivalent) | dropped | — | — | — | issue #6 |
 | E001-pipe-check-gold58 | 2026-08-31 | gold-58 / 56-58 per plane / 3 fluid planes | 3x frozen resnet34 + linear head | none (in-sample only) | 1.0 in-sample (memorized, expected) | pending | train ~13 min CPU | issue #6, commit 4ef6afc, kernel rsna-knee-train v5 |
 
 ## Log
 
 ### E000-constant-priors
 - **Hypothesis:** none — validates submission mechanics (column names, offline run, scoring completes) before any model is in the loop.
-- **Outcome:** _pending_
+- **Outcome:** dropped without submitting. The inference dry run on the placeholder test set exercised the full real-model path offline (valid submission.csv, exact headers), which covered everything this was meant to de-risk — so the first scored submission went straight to E001.
 
 ### E001-pipe-check-gold58
 - **Hypothesis:** the full pipeline (DICOM decode → series selection → train → checkpoint → offline inference) runs end to end and produces non-degenerate probabilities. Near-random LB expected; trains on the future gold-58 eval set, so this checkpoint is never compared against anything evaluated on those studies.
