@@ -11,7 +11,9 @@
   "competition_sources": [
     "rsna-knee-abnormality-detection"
   ],
-  "dataset_sources": [],
+  "dataset_sources": [
+    "josiemachalek/knee-labels"
+  ],
   "kernel_sources": [],
   "model_sources": []
 }

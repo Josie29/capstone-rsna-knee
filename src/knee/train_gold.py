@@ -1,4 +1,3 @@
-import math
 from collections.abc import Callable
 from pathlib import Path
 
@@ -7,20 +6,12 @@ import pandas as pd
 import torch
 from pydantic import BaseModel
 
-# sklearn ships no py.typed marker, so pyright sees partially-unknown types here.
-from sklearn.metrics import roc_auc_score  # pyright: ignore[reportUnknownVariableType]
-from torch import nn
-
 from knee.data import gold_studies
 from knee.dicom import DicomDecodeError, load_volume
+from knee.fitting import fit_head, per_label_auc
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 from knee.model import KneeModel, resolve_device, save_model
-from knee.series import SeriesType, best_series_of_type
-
-TRAIN_SERIES_DIR = "train_series"
-
-_HEAD_EPOCHS = 300
-_HEAD_LR = 1e-3
+from knee.series import TRAIN_SERIES_DIR, SeriesType, best_series_of_type
 
 
 class SkippedStudy(BaseModel):
@@ -40,47 +31,6 @@ class GoldTrainResult(BaseModel):
     # signal", not "the model generalizes". NaN when a label had a single class.
     in_sample_auc: dict[str, float]
     checkpoint_path: Path
-
-
-def fit_head(head: nn.Linear, features: torch.Tensor, targets: torch.Tensor) -> None:
-    """Train the linear head on cached study features.
-
-    Valid only because the backbone is frozen: `model(volume)` equals
-    `head(pool_features(volume))`, so training on cached features trains the same
-    function the checkpoint will compute.
-
-    Args:
-        head: The model's head, trained in place.
-        features: (n_studies, feature_dim) pooled study features.
-        targets: (n_studies, 12) float 0/1 labels.
-    """
-    # Up-weight positives per label so rare findings (MCL: 9/58) aren't drowned out;
-    # a label with no positives contributes no positive terms, so weight 1 is inert.
-    positives = targets.sum(dim=0)
-    negatives = targets.shape[0] - positives
-    pos_weight = torch.where(positives > 0, negatives / positives.clamp(min=1), torch.ones_like(positives))
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-
-    optimizer = torch.optim.Adam(head.parameters(), lr=_HEAD_LR)
-    head.train()
-    for _ in range(_HEAD_EPOCHS):  # full-batch: 58 rows, converges in seconds
-        optimizer.zero_grad()
-        loss = loss_fn(head(features), targets)
-        loss.backward()  # pyright: ignore[reportUnknownMemberType]
-        optimizer.step()  # pyright: ignore[reportUnknownMemberType]
-    head.eval()
-
-
-def _in_sample_auc(targets: np.ndarray, probabilities: np.ndarray) -> dict[str, float]:
-    """Per-label AUC on the training rows; NaN where a label has a single class."""
-    scores: dict[str, float] = {}
-    for column, label in enumerate(LABEL_COLUMNS):
-        if len(np.unique(targets[:, column])) < 2:  # AUC undefined for a single class
-            scores[label] = math.nan
-            continue
-        score = roc_auc_score(targets[:, column], probabilities[:, column])  # pyright: ignore[reportUnknownArgumentType, reportUnknownVariableType]
-        scores[label] = float(score)  # pyright: ignore[reportUnknownArgumentType]
-    return scores
 
 
 def train_gold(
@@ -162,13 +112,20 @@ def train_gold(
     with torch.no_grad():
         probabilities = torch.sigmoid(model.head(features)).numpy()
 
-    save_model(model, out_path, input_size=input_size, series_type=series_type)
+    save_model(
+        model,
+        out_path,
+        input_size=input_size,
+        series_type=series_type,
+        label_source="gold58",
+        n_studies=len(samples),
+    )
     log(f"checkpoint -> {out_path}")
 
     return GoldTrainResult(
         series_type=series_type,
         n_studies=len(samples),
         skipped=skipped,
-        in_sample_auc=_in_sample_auc(labels, probabilities),
+        in_sample_auc=per_label_auc(labels, probabilities),
         checkpoint_path=out_path,
     )
