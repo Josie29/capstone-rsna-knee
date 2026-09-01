@@ -14,7 +14,7 @@ from knee.cv import (
 )
 from knee.fitting import fit_head, per_label_auc
 from knee.labels import LABEL_COLUMNS
-from knee.model import KneeModel, save_model
+from knee.model import DEFAULT_BACKBONE, KneeModel, save_model
 from knee.series import SeriesType
 
 # Stamped into checkpoints and filenames; bump when the labels dataset revs.
@@ -116,6 +116,7 @@ def train_blended(
     *,
     series_types: Sequence[SeriesType] = DEFAULT_CV_SERIES_TYPES,
     model: KneeModel | None = None,
+    backbone: str = DEFAULT_BACKBONE,
     input_size: int = 224,
     label_source: str = BLENDED_LABEL_SOURCE,
     log: Callable[[str], None] = print,
@@ -134,8 +135,10 @@ def train_blended(
             columns as float probabilities — `load_blended_labels` output.
         out_dir: Directory for the per-plane checkpoints.
         series_types: The ensemble's planes, one specialist each.
-        model: Model to train; a fresh pretrained `KneeModel` when omitted.
-        input_size: Slice resize target fed to `load_volume`.
+        model: Model to train; a fresh pretrained `KneeModel(backbone)` when omitted.
+        backbone: timm model name for the fresh model; ignored when `model` is given.
+        input_size: Slice resize target fed to `load_volume`; must match the
+            backbone's expectations (fixed-size ViTs reject other sizes).
         label_source: Provenance string stamped into filenames and checkpoints.
         log: Progress sink (`print` in notebooks).
 
@@ -146,7 +149,7 @@ def train_blended(
         ValueError: Propagated from `collect_features` (bad series types) or
             `train_heads_from_bank` (a plane with zero usable studies).
     """
-    model = model or KneeModel()
+    model = model or KneeModel(backbone)
     bank = collect_features(
         comp_root,
         labels,

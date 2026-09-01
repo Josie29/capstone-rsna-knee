@@ -16,7 +16,7 @@ from knee.dicom import DicomDecodeError, load_volume
 from knee.fitting import fit_head
 from knee.infer import merge_predictions
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
-from knee.model import KneeModel, resolve_device
+from knee.model import DEFAULT_BACKBONE, KneeModel, resolve_device
 from knee.series import TRAIN_SERIES_DIR, SeriesType, best_series_of_type
 
 # The three fluid specialists of the current ensemble (E001/E002/E003).
@@ -91,6 +91,7 @@ def collect_features(
     *,
     series_types: Sequence[SeriesType] = DEFAULT_CV_SERIES_TYPES,
     model: KneeModel | None = None,
+    backbone: str = DEFAULT_BACKBONE,
     input_size: int = 224,
     log: Callable[[str], None] = print,
 ) -> FeatureBank:
@@ -108,9 +109,11 @@ def collect_features(
         labels: One row per study: `StudyInstanceUID` plus the 12 label columns as
             floats — `gold_studies` or `load_blended_labels` output.
         series_types: The ensemble's planes, one feature column each.
-        model: Feature extractor; a fresh pretrained `KneeModel` when omitted. Only
-            its frozen backbone is used — the head is never touched.
-        input_size: Slice resize target fed to `load_volume`.
+        model: Feature extractor; a fresh pretrained `KneeModel(backbone)` when
+            omitted. Only its frozen backbone is used — the head is never touched.
+        backbone: timm model name for the fresh model; ignored when `model` is given.
+        input_size: Slice resize target fed to `load_volume`; must match the
+            backbone's expectations (fixed-size ViTs reject other sizes).
         log: Progress sink (`print` in notebooks).
 
     Returns:
@@ -137,7 +140,7 @@ def collect_features(
     label_matrix = labels[list(LABEL_COLUMNS)].to_numpy(dtype=np.float32)
     log(f"{len(study_uids)} studies, planes {[t.value for t in series_types]}")
 
-    model = model or KneeModel()
+    model = model or KneeModel(backbone)
     model.freeze_backbone()
     device = resolve_device()
     model.to(device)

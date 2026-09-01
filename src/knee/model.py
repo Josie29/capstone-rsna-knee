@@ -16,6 +16,17 @@ _IMAGENET_STD = (0.229, 0.224, 0.225)
 
 DEFAULT_BACKBONE = "resnet34"
 
+# E004 production backbone: self-supervised DINOv2 features, built for the frozen
+# linear-probe regime we run. Fixed 518px input (patch 14 x 37) — pair with
+# input_size=518. Not the code default: tests and fixtures use small inputs that a
+# fixed-size ViT rejects, so notebooks opt in via config.
+DINOV2_BACKBONE = "vit_small_patch14_dinov2.lvd142m"
+
+# Upper bound on slices per backbone forward inside pool_features. Slices are
+# independent and the model is in eval mode, so chunking never changes the result;
+# it only bounds peak memory (ViT attention at 518px on a long series would OOM a T4).
+_SLICE_BATCH = 8
+
 
 @functools.cache
 def _cuda_works() -> bool:
@@ -99,7 +110,10 @@ class KneeModel(nn.Module):
             raise ValueError(f"Expected non-empty (n_slices, H, W) volume, got {tuple(volume.shape)}")
         slices = volume.unsqueeze(1).repeat(1, 3, 1, 1)  # gray -> 3ch
         slices = (slices - self.pixel_mean) / self.pixel_std
-        per_slice = self.backbone(slices)  # (n_slices, num_features)
+        # torch stubs leave Tensor.split partially unknown; it yields plain Tensors.
+        per_slice = torch.cat(
+            [self.backbone(chunk) for chunk in slices.split(_SLICE_BATCH)]  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        )  # (n_slices, num_features)
         return torch.cat([per_slice.mean(dim=0), per_slice.max(dim=0).values])
 
     def forward(self, volume: torch.Tensor) -> torch.Tensor:
