@@ -17,7 +17,10 @@ Full specifics: [docs/competition-notes.md](docs/competition-notes.md).
 
 ## Status
 
-Scaffold only. No data downloaded, no baseline, no submission.
+First scored submission on the board: public LB macro AUC 0.691 from the gold-58
+prototype (3 per-plane fluid specialists, frozen backbone + linear head — see
+`docs/experiments.md` E001). Next up: report-label mining (#2) to unlock the other
+~4,350 studies.
 
 **Entry deadline 2026-10-15 · final submission 2026-10-22.**
 
