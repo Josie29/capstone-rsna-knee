@@ -19,7 +19,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 |---|---|---|---|---|---|---|---|---|
 | E004-dinov2-frozen | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | 3x frozen DINOv2 ViT-S/14 @518 + linear head, plane-prior combiner | blended-cv A/B vs resnet34 @224 (baseline = E003's recorded run) | pending | pending | — | this file (log below), PR #14 |
 | E003-blended-labels | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | same arch as E001 (frozen resnet34 + linear heads), soft-target BCE | **new regime**: pooled-OOF 5x5 stratified CV over all blended studies (vs labels thresholded at 0.5) + public LB A/B vs E002 | pending | pending | pending | this file (log below), PR pending |
-| E002-plane-prior-combiner | 2026-09-01 | gold-58 checkpoints (unchanged) | E001 models + clinical per-label plane weights | public LB A/B vs E001 | — | pending | — | docs/clinical understanding/plane-abnormality-relevance.md |
+| E002-plane-prior-combiner | 2026-09-01 | gold-58 checkpoints (unchanged) | E001 models + clinical per-label plane weights | public LB A/B vs E001 | — | 0.692 | — | docs/clinical understanding/plane-abnormality-relevance.md |
 | E001-pipe-check-gold58 | 2026-08-31 | gold-58 / 56-58 per plane / 3 fluid planes | 3x frozen resnet34 + linear head | none (in-sample only) | 1.0 in-sample (memorized, expected) | 0.691 | train ~13 min CPU; scoring completed ~4h wall | issue #6, commit 4ef6afc, kernels train v5 / inference v2 |
 
 ## Log
@@ -31,7 +31,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 
 ### E002-plane-prior-combiner
 - **Hypothesis:** weighting each label's ensemble average by clinical plane-of-choice (e.g. MCL trusts coronal, PF OA trusts axial) beats the uniform mean. Controlled A/B vs E001: identical checkpoints, combiner-only change, so any LB delta is attributable to the weighting.
-- **Outcome:** _pending_
+- **Outcome (submission, 2026-09-01): public LB macro AUC 0.692 vs E001's 0.691 — +0.001, a null.** Well inside the noise floor (paired σ on comparisons this size is ~0.01+; see docs/rsna_brain.md §2.7), so the clinical prior neither helped nor hurt measurably on gold-58-quality checkpoints. Keeping the combiner: it costs nothing at inference, the renormalization-over-present-planes behavior is load-bearing for missing series, and the E003/E004 blended-labels regime re-tests it with far better-trained heads where per-plane differences may actually surface. The learned combiner (DECISIONS.md #3) remains the eventual replacement.
 
 ### E003-blended-labels
 - **Hypothesis:** 76x sample size is the biggest available lever. Training the same frozen-backbone + linear-head specialists on all 4,407 studies with blended soft labels (report-mined probabilities, `knee-labels` dataset) beats the 0.691 gold-58 baseline (and E002's score once known). Controlled vs E002: identical architecture and inference (plane-prior combiner unchanged), labels-only change.
