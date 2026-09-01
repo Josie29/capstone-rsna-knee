@@ -17,7 +17,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
-| E004-dinov2-frozen | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | 3x frozen DINOv2 ViT-S/14 @518 + linear head, plane-prior combiner | blended-cv A/B vs resnet34 @224 | pending | pending | — | this file (log below), PR #14 |
+| E004-dinov2-frozen | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | 3x frozen DINOv2 ViT-S/14 @518 + linear head, plane-prior combiner | blended-cv A/B vs resnet34 @224 (same kernel run as E003, two-arm notebook) | pending | pending | — | this file (log below), PR #14 |
 | E003-blended-labels | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | same arch as E001 (frozen resnet34 + linear heads), soft-target BCE | **new regime**: pooled-OOF 5x5 stratified CV over all blended studies (vs labels thresholded at 0.5) + public LB A/B vs E002 | pending | pending | pending | this file (log below), PR pending |
 | E002-plane-prior-combiner | 2026-09-01 | gold-58 checkpoints (unchanged) | E001 models + clinical per-label plane weights | public LB A/B vs E001 | — | pending | — | docs/clinical understanding/plane-abnormality-relevance.md |
 | E001-pipe-check-gold58 | 2026-08-31 | gold-58 / 56-58 per plane / 3 fluid planes | 3x frozen resnet34 + linear head | none (in-sample only) | 1.0 in-sample (memorized, expected) | 0.691 | train ~13 min CPU; scoring completed ~4h wall | issue #6, commit 4ef6afc, kernels train v5 / inference v2 |
@@ -35,7 +35,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 
 ### E003-blended-labels
 - **Hypothesis:** 76x sample size is the biggest available lever. Training the same frozen-backbone + linear-head specialists on all 4,407 studies with blended soft labels (report-mined probabilities, `knee-labels` dataset) beats the 0.691 gold-58 baseline (and E002's score once known). Controlled vs E002: identical architecture and inference (plane-prior combiner unchanged), labels-only change.
-- **Design notes:** heads train on the soft probabilities directly (BCE accepts soft targets; the `__weight`/`__tier` columns are validated but deliberately unused — tier-weighted loss is the next experiment). Labels are thresholded at 0.5 only where a binary quantity is required (fold stratification, AUC). The blended labels scored macro AUC 0.887 against the 58 gold studies (measured 2026-09-01, wide CIs at n=58) — a rough ceiling for what training on them can reach. Gold-58 is retired as a special set (DECISIONS.md #5): the labeled pool is now the full 4,407 and CV runs over all of it. One threaded decode pass fills a persisted feature bank (`feature_bank_blended_v1.pt` in the kernel output), so head retrains and CV repeats cost seconds; checkpoints now embed `label_source`/`n_studies` provenance.
+- **Design notes:** heads train on the soft probabilities directly (BCE accepts soft targets; the `__weight`/`__tier` columns are validated but deliberately unused — tier-weighted loss is the next experiment). Labels are thresholded at 0.5 only where a binary quantity is required (fold stratification, AUC). The blended labels scored macro AUC 0.887 against the 58 gold studies (measured 2026-09-01, wide CIs at n=58) — a rough ceiling for what training on them can reach. Gold-58 is retired as a special set (DECISIONS.md #5): the labeled pool is now the full 4,407 and CV runs over all of it. One threaded decode pass fills a persisted feature bank (`feature_bank_blended_v1_resnet34.pt` in the kernel output), so head retrains and CV repeats cost seconds; checkpoints now embed `label_source`/`n_studies` provenance. Trains as the `resnet34` arm of the two-arm kernel run shared with E004 — same labels/seed/folds across arms, so both rows resolve from one run.
 - **Outcome:** _pending_
 
 ### E004-dinov2-frozen
@@ -48,5 +48,6 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
   (docs/rsna_brain.md §2.31/§2.32/§2.36): backbone *size* scaling is a measured null
   and one controlled test saw DINOv2-Small lose to ResNet-34 — so this cheap A/B
   decides whether backbone investment continues (unfreezing next) or stops in favor
-  of input-geometry work.
+  of input-geometry work. Runs as the `dinov2` arm of the two-arm kernel run shared
+  with E003; only the winning arm's checkpoints ship to knee-weights.
 - **Outcome:** _pending_
