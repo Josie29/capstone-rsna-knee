@@ -43,11 +43,12 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
   frozen supervised ImageNet ResNet-34 features at 224px in our linear-probe regime,
   now trained on the blended 4,407-study pool. Controlled A/B under `blended-cv`:
   same labels, folds/seed, and combiner as E003 — the delta is attributable to
-  backbone + resolution jointly. Decision rule: submit only if DINOv2's CV macro
-  beats the ResNet baseline by more than the per-repeat spread. Forum context
-  (docs/rsna_brain.md §2.31/§2.32/§2.36): backbone *size* scaling is a measured null
-  and one controlled test saw DINOv2-Small lose to ResNet-34 — so this cheap A/B
-  decides whether backbone investment continues (unfreezing next) or stops in favor
-  of input-geometry work. Runs as the `dinov2` arm of the two-arm kernel run shared
-  with E003; only the winning arm's checkpoints ship to knee-weights.
+  backbone + resolution jointly. The dinov2 checkpoints ship and get submitted
+  regardless of the CV comparison; the resnet arm's CV is the diagnostic baseline —
+  if the LB or CV disappoints, it tells us whether to debug the backbone swap or
+  look elsewhere. Forum context (docs/rsna_brain.md §2.31/§2.32/§2.36): backbone
+  *size* scaling is a measured null and one controlled test saw DINOv2-Small lose
+  to ResNet-34 — so the A/B numbers also decide whether backbone investment
+  continues (unfreezing next) or stops in favor of input-geometry work. Runs as the
+  `dinov2` arm of the two-arm kernel run shared with E003.
 - **Outcome:** _pending_
