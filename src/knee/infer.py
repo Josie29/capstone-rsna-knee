@@ -1,42 +1,76 @@
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import torch
 
 from knee.dicom import DicomDecodeError, load_volume
-from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN, SUBMISSION_COLUMNS
+from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN, SUBMISSION_COLUMNS, Label
 from knee.model import LoadedModel, load_model, resolve_device
-from knee.series import best_series_of_type
+from knee.plane_prior import combiner_weights
+from knee.series import SeriesType, best_series_of_type
 
 TEST_SERIES_DIR = "test_series"
 
 # Emitted when no model produced a prediction for a study; matches sample_submission.
 _FALLBACK_PROBABILITY = 0.5
 
+# DICOM decode is CPU-bound and serial per slice; pylibjpeg's C decoders release the
+# GIL, so threads genuinely parallelize it across the machine's cores.
+_DECODE_WORKERS = 4
 
-def _predict_one(
+
+def _decode_for_model(
     model: LoadedModel,
     study_series: pd.DataFrame,
     study_dir: Path,
-    device: str,
     log: Callable[[str], None],
-) -> np.ndarray:
-    """One model's 12 probabilities for one study, or a NaN row when it can't run.
+) -> torch.Tensor | None:
+    """The chosen series' volume for one model, or None when the model sits out.
 
-    NaN (not a fallback constant) so the ensemble mean renormalizes over the models
-    that did run. Decode failures are logged and skipped, never raised — a crash at
-    scoring time costs a submission.
+    None (not a raise) covers both a missing series type and a decode failure —
+    logged and skipped, never raised, because a crash at scoring time costs a
+    submission.
     """
     series_uid = best_series_of_type(study_series, model.series_type)
     if series_uid is None:
-        return np.full(len(LABEL_COLUMNS), np.nan)
+        return None
     try:
-        volume = load_volume(study_dir / series_uid, size=model.input_size)
-        return model.model.predict_study(volume.to(device)).cpu().numpy()
+        return load_volume(study_dir / series_uid, size=model.input_size)
     except (ValueError, DicomDecodeError) as exc:
         log(f"model {model.series_type}: skipping series {series_uid}: {exc}")
-        return np.full(len(LABEL_COLUMNS), np.nan)
+        return None
+
+
+def merge_predictions(per_model: np.ndarray, series_types: list[SeriesType]) -> np.ndarray:
+    """Merge per-model probability rows into one study row via the clinical plane prior.
+
+    Each label is a weighted average over the models that ran (non-NaN rows), with
+    `combiner_weights` giving the plane of choice for that finding the larger say —
+    interim fixed weights until learned ones exist (DECISIONS.md #3). A study no
+    model could read gets the sample-submission constant, never NaN.
+
+    Args:
+        per_model: (n_models, 12) probabilities; a model that sat out is a NaN row.
+        series_types: Series type per row of `per_model`.
+
+    Returns:
+        (12,) merged probabilities in `LABEL_COLUMNS` order.
+    """
+    present = [index for index, row in enumerate(per_model) if not np.isnan(row).all()]
+    if not present:
+        return np.full(len(LABEL_COLUMNS), _FALLBACK_PROBABILITY)
+    present_types = [series_types[index] for index in present]
+    merged = np.empty(len(LABEL_COLUMNS))
+    for column, label in enumerate(Label):
+        weights = combiner_weights(present_types, label)
+        merged[column] = sum(
+            weight * per_model[index][column]
+            for weight, index in zip(weights, present, strict=True)
+        )
+    return merged
 
 
 def predict_studies(
@@ -80,23 +114,38 @@ def predict_studies(
 
     test_df = pd.read_csv(comp_root / "test.csv")
     series_df = pd.read_csv(comp_root / "test_series.csv")
+    study_uids = [str(uid) for uid in test_df[STUDY_ID_COLUMN]]
 
     rows: list[list[object]] = []
-    for position, study_uid in enumerate(test_df[STUDY_ID_COLUMN].astype(str), start=1):
-        study_series = series_df[series_df[STUDY_ID_COLUMN] == study_uid]
-        study_dir = comp_root / TEST_SERIES_DIR / study_uid
-        per_model = np.stack(
-            [_predict_one(m, study_series, study_dir, device, log) for m in models]
-        )
-        if np.isnan(per_model).all():
-            log(f"no model could read study {study_uid}; emitting {_FALLBACK_PROBABILITY}")
-            merged = np.full(len(LABEL_COLUMNS), _FALLBACK_PROBABILITY)
-        else:
-            # NaN-aware mean = renormalize over the models that ran for this study.
-            merged = np.nanmean(per_model, axis=0)
-        rows.append([study_uid, *merged.tolist()])
-        if position % 100 == 0:
-            log(f"predicted {position}/{len(test_df)}")
+    with ThreadPoolExecutor(max_workers=_DECODE_WORKERS) as executor:
+
+        def submit_decodes(study_uid: str) -> list[Future[torch.Tensor | None]]:
+            study_series = series_df[series_df[STUDY_ID_COLUMN] == study_uid]
+            study_dir = comp_root / TEST_SERIES_DIR / study_uid
+            return [
+                executor.submit(_decode_for_model, m, study_series, study_dir, log)
+                for m in models
+            ]
+
+        pending = submit_decodes(study_uids[0]) if study_uids else []
+        for position, study_uid in enumerate(study_uids, start=1):
+            volumes = [future.result() for future in pending]
+            if position < len(study_uids):
+                # Queue the next study's decodes so they overlap the forwards below.
+                pending = submit_decodes(study_uids[position])
+            per_model = np.stack(
+                [
+                    np.full(len(LABEL_COLUMNS), np.nan)
+                    if volume is None
+                    else m.model.predict_study(volume.to(device)).cpu().numpy()
+                    for m, volume in zip(models, volumes, strict=True)
+                ]
+            )
+            if np.isnan(per_model).all():
+                log(f"no model could read study {study_uid}; emitting {_FALLBACK_PROBABILITY}")
+            rows.append([study_uid, *merge_predictions(per_model, types).tolist()])
+            if position % 100 == 0:
+                log(f"predicted {position}/{len(study_uids)}")
 
     frame = pd.DataFrame(rows, columns=list(SUBMISSION_COLUMNS))
     if frame.isna().any().any():  # belt and braces: NaN scores as an invalid submission

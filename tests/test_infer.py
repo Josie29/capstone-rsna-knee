@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from conftest import write_dicom_slice
 
-from knee.infer import predict_studies
+from knee.infer import merge_predictions, predict_studies
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN, SUBMISSION_COLUMNS
 from knee.model import KneeModel, save_model
 from knee.series import SeriesType
@@ -94,3 +94,28 @@ def test_no_checkpoints_is_rejected(tmp_path: Path) -> None:
     'submission' that looks valid but contains no model at all."""
     with pytest.raises(ValueError, match="at least one checkpoint"):
         predict_studies(tmp_path, [], log=lambda _: None)
+
+
+def test_merge_weights_toward_the_plane_of_choice() -> None:
+    """Catches the prior being applied on the wrong axis or ignored — for MCL the
+    coronal model (grade 3) must dominate the sagittal one (grade 1), so the merged
+    value must land closer to coronal's opinion than a plain mean would."""
+    types = [SeriesType.SAGITTAL_FLUID, SeriesType.CORONAL_FLUID]
+    per_model = np.stack([np.full(12, 0.0), np.full(12, 1.0)])  # sag says no, cor says yes
+    merged = merge_predictions(per_model, types)
+
+    mcl = list(LABEL_COLUMNS).index("MCL")
+    acl = list(LABEL_COLUMNS).index("ACL")
+    assert merged[mcl] == pytest.approx(3 / 4)  # cor 3 vs sag 1
+    assert merged[acl] == pytest.approx(2 / 5)  # sag 3 vs cor 2
+
+
+def test_merge_handles_missing_and_absent_models() -> None:
+    """Catches NaN rows leaking into the weighted sum — one unreadable plane must
+    renormalize, and all-unreadable must yield the 0.5 fallback, never NaN."""
+    types = [SeriesType.SAGITTAL_FLUID, SeriesType.CORONAL_FLUID]
+    one_out = np.stack([np.full(12, 0.8), np.full(12, np.nan)])
+    assert merge_predictions(one_out, types) == pytest.approx(np.full(12, 0.8))
+
+    all_out = np.full((2, 12), np.nan)
+    assert (merge_predictions(all_out, types) == 0.5).all()
