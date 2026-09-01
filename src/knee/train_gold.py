@@ -14,7 +14,7 @@ from torch import nn
 from knee.data import gold_studies
 from knee.dicom import DicomDecodeError, load_volume
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
-from knee.model import KneeModel, resolve_device, save_model
+from knee.model import DEFAULT_BACKBONE, KneeModel, resolve_device, save_model
 from knee.series import SeriesType, best_series_of_type
 
 TRAIN_SERIES_DIR = "train_series"
@@ -89,6 +89,7 @@ def train_gold(
     *,
     series_type: SeriesType = SeriesType.SAGITTAL_FLUID,
     model: KneeModel | None = None,
+    backbone: str = DEFAULT_BACKBONE,
     input_size: int = 224,
     log: Callable[[str], None] = print,
 ) -> GoldTrainResult:
@@ -106,8 +107,10 @@ def train_gold(
             `/kaggle/input/rsna-knee-abnormality-detection`).
         out_path: Where to write the .pt checkpoint.
         series_type: The one series type this model trains on and will consume.
-        model: Model to train; a fresh pretrained `KneeModel` when omitted.
-        input_size: Slice resize target fed to `load_volume`.
+        model: Model to train; a fresh pretrained `KneeModel(backbone)` when omitted.
+        backbone: timm model name for the fresh model; ignored when `model` is given.
+        input_size: Slice resize target fed to `load_volume`; must match the
+            backbone's expectations (fixed-size ViTs reject other sizes).
         log: Progress sink (`print` in notebooks).
 
     Returns:
@@ -122,7 +125,7 @@ def train_gold(
     gold = gold_studies(train_df)
     log(f"{len(gold)} gold studies")
 
-    model = model or KneeModel()
+    model = model or KneeModel(backbone)
     model.freeze_backbone()
     device = resolve_device()
     model.to(device)

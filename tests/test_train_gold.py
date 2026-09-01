@@ -6,8 +6,9 @@ import pytest
 import torch
 from conftest import write_dicom_slice
 
+from knee import model as model_module
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
-from knee.model import KneeModel, load_model, save_model
+from knee.model import DINOV2_BACKBONE, KneeModel, load_model, save_model
 from knee.series import SeriesType
 from knee.train_gold import train_gold
 
@@ -52,6 +53,36 @@ def test_tampered_label_order_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="label order"):
         load_model(tmp_path / "bad.pt")
+
+
+def test_dinov2_backbone_round_trips_at_native_size(tmp_path: Path) -> None:
+    """Catches the DINOv2 arch failing offline reconstruction — the submission
+    notebook rebuilds the ViT with pretrained=False from checkpoint metadata alone,
+    and a name/shape mismatch there surfaces only at scoring time, costing a
+    submission."""
+    model = KneeModel(DINOV2_BACKBONE, pretrained=False)
+    model.eval()
+    volume = torch.rand(2, 518, 518, generator=torch.Generator().manual_seed(0))
+    features = model.pool_features(volume)
+    assert features.shape == (2 * 384,)  # ViT-S is 384-d; mean+max concat doubles it
+
+    save_model(model, tmp_path / "ck.pt", input_size=518, series_type=SeriesType.AXIAL_FLUID)
+    loaded = load_model(tmp_path / "ck.pt")
+    assert loaded.input_size == 518
+    torch.testing.assert_close(loaded.model.pool_features(volume), features)
+
+
+def test_slice_chunking_matches_full_batch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches a chunking bug in pool_features silently shifting every prediction —
+    e.g. dropping the tail chunk or pooling per-chunk instead of across all slices —
+    which no other test would notice because chunked is the only code path."""
+    net = KneeModel(pretrained=False)
+    net.eval()
+    volume = torch.rand(7, 64, 64, generator=torch.Generator().manual_seed(1))
+    full = net.pool_features(volume)  # 7 slices <= _SLICE_BATCH: one backbone call
+    monkeypatch.setattr(model_module, "_SLICE_BATCH", 3)
+    chunked = net.pool_features(volume)  # 3 + 3 + 1 slices
+    torch.testing.assert_close(full, chunked)
 
 
 def test_empty_volume_is_rejected() -> None:

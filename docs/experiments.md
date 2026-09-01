@@ -13,6 +13,7 @@ with the per-repeat spread in the log entry when it matters.
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
+| E003-dinov2-frozen | 2026-09-01 | gold-58 / 56-58 per plane / 3 fluid planes | 3x frozen DINOv2 ViT-S/14 @518 + linear head, plane-prior combiner | gold58-cv A/B vs resnet34 @224 | pending | pending | — | this file, kernels train (pending push) |
 | E002-plane-prior-combiner | 2026-09-01 | gold-58 checkpoints (unchanged) | E001 models + clinical per-label plane weights | public LB A/B vs E001 | — | pending | — | docs/clinical understanding/plane-abnormality-relevance.md |
 | E001-pipe-check-gold58 | 2026-08-31 | gold-58 / 56-58 per plane / 3 fluid planes | 3x frozen resnet34 + linear head | none (in-sample only) | 1.0 in-sample (memorized, expected) | 0.691 | train ~13 min CPU; scoring completed ~4h wall | issue #6, commit 4ef6afc, kernels train v5 / inference v2 |
 
@@ -22,6 +23,15 @@ with the per-repeat spread in the log entry when it matters.
 - **Hypothesis:** the full pipeline (DICOM decode → series selection → train → checkpoint → offline inference) runs end to end and produces non-degenerate probabilities. Near-random LB expected; trains on the future gold-58 eval set, so this checkpoint is never compared against anything evaluated on those studies.
 - **Outcome (training half, 2026-08-31):** three per-plane fluid specialists trained on Kaggle (kernel v5, commit 4ef6afc). Zero DICOM decode failures across ~170 real series — transfer-syntax risk retired. Per-plane skips matched measured coverage exactly (sag 56/58, cor 56/58, ax 58/58). In-sample AUC 1.0 everywhere = memorization at n≈56, the expected fit-sanity signal. Environment lessons now baked into the notebooks: pip needs --no-deps on Kaggle (numpy upgrade breaks the image), competition data mounts at /kaggle/input/competitions/<slug>, and the default GPU is too old for the image's torch (cu128) — CPU sufficed here; pick T4/L4 in the UI when training gets heavy. LB score pending the inference half.
 - **Outcome (submission, 2026-09-01): public LB macro AUC 0.691.** Far above the ~0.5 expectation for a gold-58 prototype — frozen ImageNet features + linear heads generalize despite n≈56 training rows. Issue #6 complete: full train→checkpoint→datasets→offline ensemble→submission path proven. 0.691 is now the baseline every lever pull gets measured against.
+
+### E003-dinov2-frozen
+- **Hypothesis:** frozen self-supervised DINOv2 ViT-S/14 features at native 518px beat
+  frozen supervised ImageNet ResNet-34 features at 224px in our linear-probe regime
+  (DINOv2's headline claim, repeatedly confirmed on medical imaging). Controlled A/B:
+  same folds/seed under `gold58-cv`, same combiner — the delta is attributable to
+  backbone + resolution jointly. Decision rule: submit only if DINOv2's CV macro beats
+  the ResNet baseline by more than the per-repeat spread.
+- **Outcome:** _pending_
 
 ### E002-plane-prior-combiner
 - **Hypothesis:** weighting each label's ensemble average by clinical plane-of-choice (e.g. MCL trusts coronal, PF OA trusts axial) beats the uniform mean. Controlled A/B vs E001: identical checkpoints, combiner-only change, so any LB delta is attributable to the weighting.
