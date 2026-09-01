@@ -7,8 +7,7 @@ and measured separately (one experiments.md row per pull). Ordered by expected i
 
 Quantity × quality of (study, 12 labels) pairs. Today: 58 gold studies. The report
 miner (issue #2) raises quantity to ~4.4k; its error rate caps everything downstream —
-a better miner beats a better model. Later: soft labels + noise-aware losses so the
-model doesn't confidently learn miner mistakes.
+a better miner beats a better model.
 
 ## 2. Input selection — which pixels from each study the model sees
 
