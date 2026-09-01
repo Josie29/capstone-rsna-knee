@@ -5,9 +5,11 @@
   "language": "python",
   "kernel_type": "notebook",
   "is_private": true,
-  "enable_gpu": true,
+  "enable_gpu": false,
   "enable_internet": false,
-  "competition_sources": ["rsna-knee-abnormality-detection"],
+  "competition_sources": [
+    "rsna-knee-abnormality-detection"
+  ],
   "dataset_sources": [
     "josiemachalek/knee-code",
     "josiemachalek/knee-weights"
