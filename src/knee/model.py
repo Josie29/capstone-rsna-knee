@@ -108,8 +108,16 @@ class KneeModel(nn.Module):
 
     @torch.inference_mode()
     def predict_study(self, volume: torch.Tensor) -> torch.Tensor:
-        """Probabilities for one study's volume, in `LABEL_COLUMNS` order."""
-        return torch.sigmoid(self.forward(volume))
+        """Probabilities for one study's volume, in `LABEL_COLUMNS` order.
+
+        Runs the backbone under fp16 autocast on CUDA (~2x on T4 tensor cores);
+        a no-op on CPU. Logits are cast back to fp32 before the sigmoid so callers
+        always see full-precision probabilities.
+        """
+        on_cuda = self.pixel_mean.device.type == "cuda"
+        with torch.autocast("cuda", enabled=on_cuda):
+            logits = self.forward(volume)
+        return torch.sigmoid(logits.float())
 
 
 class LoadedModel(BaseModel):
