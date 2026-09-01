@@ -14,7 +14,7 @@ from torch import nn
 from knee.data import gold_studies
 from knee.dicom import DicomDecodeError, load_volume
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
-from knee.model import KneeModel, save_model
+from knee.model import KneeModel, resolve_device, save_model
 from knee.series import SeriesType, best_series_of_type
 
 TRAIN_SERIES_DIR = "train_series"
@@ -124,7 +124,7 @@ def train_gold(
 
     model = model or KneeModel()
     model.freeze_backbone()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = resolve_device()
     model.to(device)
     model.eval()
 

@@ -1,3 +1,4 @@
+import functools
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,31 @@ _IMAGENET_MEAN = (0.485, 0.456, 0.406)
 _IMAGENET_STD = (0.229, 0.224, 0.225)
 
 DEFAULT_BACKBONE = "resnet34"
+
+
+@functools.cache
+def _cuda_works() -> bool:
+    """Probe CUDA once per process; hardware does not change mid-run.
+
+    `torch.cuda.is_available()` is not enough on Kaggle: the default-assigned P100
+    predates the image's torch build (no sm_60 kernels), so the first CUDA op raises
+    `cudaErrorNoKernelImageForDevice`. The `+ 1` forces an arithmetic kernel launch
+    and `.item()` forces a sync — CUDA errors are asynchronous, so without the sync
+    the failure would surface at some later unrelated call outside this try block.
+    """
+    if not torch.cuda.is_available():
+        return False
+    try:
+        (torch.zeros(2, device="cuda") + 1).sum().item()
+        return True
+    except RuntimeError as exc:  # torch.AcceleratorError subclasses RuntimeError
+        print(f"CUDA present but unusable ({exc}); falling back to CPU")
+        return False
+
+
+def resolve_device() -> str:
+    """The device every model call should use: "cuda" only if it actually works."""
+    return "cuda" if _cuda_works() else "cpu"
 
 
 class KneeModel(nn.Module):
