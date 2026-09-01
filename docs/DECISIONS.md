@@ -8,3 +8,12 @@
    fixed per-label combiner weights while no validation split exists to learn them.
    Weights, not masks — nothing is zeroed — and #2 still governs: measured per-label
    AUC overrules the prior, and the learned combiner replaces it once issue #3 lands.
+4. Local eval protocol (`gold58-cv`): pooled out-of-fold stratified k-fold cross
+   validation on the gold studies, evaluated at ensemble level — per fold, fresh
+   per-plane heads train on the fold's training studies and the production combiner
+   merges the held-out predictions (src/knee/cv_gold.py; defaults 5 folds x 5
+   repeats, seed 0). AUC is computed once over the pooled OOF rows, never per fold
+   (rare labels make ~12-study folds undefined/noisy); the per-repeat macro spread is
+   the error bar. This is what the experiments.md Val AUC column means. It ranks
+   levers locally before spending a submission — the public LB stays the arbiter, and
+   at n=58 only deltas well outside the repeat spread count as signal.
