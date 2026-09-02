@@ -12,8 +12,7 @@
     "rsna-knee-abnormality-detection"
   ],
   "dataset_sources": [
-    "josiemachalek/knee-labels",
-    "josiemachalek/knee-e005-artifacts"
+    "josiemachalek/knee-labels"
   ],
   "kernel_sources": [],
   "model_sources": []

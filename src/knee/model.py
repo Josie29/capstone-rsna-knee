@@ -211,6 +211,7 @@ class KneeModel(nn.Module):
         head_type: HeadType = HeadType.MEAN_MAX,
         input_mode: InputMode = InputMode.SLICES,
         n_anchors: int = 3,
+        image_size: int | None = None,
     ) -> None:
         """Build the model.
 
@@ -224,13 +225,21 @@ class KneeModel(nn.Module):
             input_mode: What the backbone sees per study — every gray slice, or
                 `n_anchors` adjacent-slice triplet images (2.5D).
             n_anchors: Triplet count when `input_mode` is TRIPLETS; ignored otherwise.
+            image_size: Override the backbone's native input size — required to run
+                fixed-size ViTs (DINOv2's 518) at an affordable resolution; timm
+                interpolates the position embeddings. None keeps the backbone's
+                default and must stay None for CNNs, which reject the kwarg.
         """
         super().__init__()
         self.backbone_name = backbone
         self.head_type = HeadType(head_type)
         self.input_mode = InputMode(input_mode)
         self.n_anchors = n_anchors
-        self.backbone = timm.create_model(backbone, pretrained=pretrained, num_classes=0)
+        self.image_size = image_size
+        if image_size is not None:
+            self.backbone = timm.create_model(backbone, pretrained=pretrained, num_classes=0, img_size=image_size)
+        else:
+            self.backbone = timm.create_model(backbone, pretrained=pretrained, num_classes=0)
         # nn.Module attribute access types as Tensor | Module; timm guarantees an int here.
         num_features = int(self.backbone.num_features)  # pyright: ignore[reportArgumentType]
         self.head: nn.Module = (
@@ -384,6 +393,7 @@ def save_model(
             "crop_mm": crop_mm,
             "input_mode": model.input_mode.value,
             "n_anchors": model.n_anchors,
+            "image_size": model.image_size,
         },
         path,
     )
@@ -410,12 +420,14 @@ def load_model(path: Path) -> LoadedModel:
     # all mean_max over gray slices.
     head_type = HeadType(payload.get("head_type", HeadType.MEAN_MAX.value))
     input_mode = InputMode(payload.get("input_mode", InputMode.SLICES.value))
+    image_size = payload.get("image_size")  # pre-E007 checkpoints used native sizes
     model = KneeModel(
         payload["backbone"],
         pretrained=False,
         head_type=head_type,
         input_mode=input_mode,
         n_anchors=int(payload.get("n_anchors", 3)),
+        image_size=int(image_size) if image_size is not None else None,
     )
     model.load_state_dict(payload["state_dict"])
     model.eval()
