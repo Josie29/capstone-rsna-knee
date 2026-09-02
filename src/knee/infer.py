@@ -38,7 +38,7 @@ def _decode_for_model(
     if series_uid is None:
         return None
     try:
-        return load_volume(study_dir / series_uid, size=model.input_size)
+        return load_volume(study_dir / series_uid, size=model.input_size, crop_mm=model.crop_mm)
     except (ValueError, DicomDecodeError) as exc:
         log(f"model {model.series_type}: skipping series {series_uid}: {exc}")
         return None

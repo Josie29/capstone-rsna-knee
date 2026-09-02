@@ -102,6 +102,7 @@ def collect_features(
     model: KneeModel | None = None,
     backbone: str = DEFAULT_BACKBONE,
     input_size: int = 224,
+    crop_mm: float | None = None,
     log: Callable[[str], None] = print,
 ) -> FeatureBank:
     """Decode every labeled study once per plane and cache pooled backbone features.
@@ -123,6 +124,8 @@ def collect_features(
         backbone: timm model name for the fresh model; ignored when `model` is given.
         input_size: Slice resize target fed to `load_volume`; must match the
             backbone's expectations (fixed-size ViTs reject other sizes).
+        crop_mm: Fixed-mm crop fed to `load_volume` (None = full frame). Checkpoints
+            trained from this bank must be saved with the same value.
         log: Progress sink (`print` in notebooks).
 
     Returns:
@@ -164,7 +167,9 @@ def collect_features(
         if series_uid is None:
             return None
         try:
-            return load_volume(comp_root / TRAIN_SERIES_DIR / study_uid / series_uid, size=input_size)
+            return load_volume(
+                comp_root / TRAIN_SERIES_DIR / study_uid / series_uid, size=input_size, crop_mm=crop_mm
+            )
         except (ValueError, DicomDecodeError) as exc:
             log(f"{series_type}: skipping series of study {position + 1}: {exc}")
             return None

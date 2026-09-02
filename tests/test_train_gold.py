@@ -42,6 +42,21 @@ def test_predictions_are_probabilities_per_label(tmp_path: Path) -> None:
     assert ((probs > 0.0) & (probs < 1.0)).all()
 
 
+def test_checkpoint_round_trips_crop_mm(tmp_path: Path) -> None:
+    """Catches inference silently feeding a crop-trained model full-frame pixels —
+    the model would see anatomy at the wrong physical scale on every study, a
+    plausible-but-wrong failure the leaderboard can't diagnose."""
+    model = KneeModel(pretrained=False)
+    save_model(model, tmp_path / "ck.pt", input_size=64, series_type=SeriesType.SAGITTAL_FLUID, crop_mm=140.0)
+    assert load_model(tmp_path / "ck.pt").crop_mm == 140.0
+
+    # Pre-E005a checkpoints carry no crop_mm field and must load as full-frame.
+    payload = torch.load(tmp_path / "ck.pt", weights_only=True)
+    del payload["crop_mm"]
+    torch.save(payload, tmp_path / "legacy.pt")
+    assert load_model(tmp_path / "legacy.pt").crop_mm is None
+
+
 def test_tampered_label_order_is_rejected(tmp_path: Path) -> None:
     """Catches a checkpoint from a stale code version whose label order differs —
     loading it would silently assign every probability to the wrong finding."""
