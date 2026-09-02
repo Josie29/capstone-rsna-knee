@@ -251,6 +251,9 @@ class LoadedModel(BaseModel):
     # The one series type this model consumes — specialist models must never be fed
     # another type (a fluid-trained model reads non-fluid contrast backwards).
     series_type: SeriesType
+    # Fixed-mm crop the model was trained with (None = full frame); inference must
+    # reproduce it or the model sees anatomy at the wrong physical scale.
+    crop_mm: float | None
 
 
 def save_model(
@@ -261,6 +264,7 @@ def save_model(
     series_type: SeriesType,
     label_source: str = "unspecified",
     n_studies: int = 0,
+    crop_mm: float | None = None,
 ) -> None:
     """Write the full model (backbone + head weights) plus reproduction metadata.
 
@@ -277,6 +281,8 @@ def save_model(
             "blended_v1") — without it, checkpoints from different label regimes are
             byte-for-byte indistinguishable.
         n_studies: Number of studies the head actually trained on.
+        crop_mm: Fixed-mm crop the training volumes used (None = full frame);
+            stored so inference reproduces the same physical scale.
     """
     torch.save(
         {
@@ -288,6 +294,7 @@ def save_model(
             "label_source": label_source,
             "n_studies": n_studies,
             "head_type": model.head_type.value,
+            "crop_mm": crop_mm,
         },
         path,
     )
@@ -315,8 +322,10 @@ def load_model(path: Path) -> LoadedModel:
     model = KneeModel(payload["backbone"], pretrained=False, head_type=head_type)
     model.load_state_dict(payload["state_dict"])
     model.eval()
+    crop_mm = payload.get("crop_mm")  # pre-E005a checkpoints trained on full frames
     return LoadedModel(
         model=model,
         input_size=int(payload["input_size"]),
         series_type=SeriesType(payload["series_type"]),
+        crop_mm=float(crop_mm) if crop_mm is not None else None,
     )

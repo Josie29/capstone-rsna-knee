@@ -40,6 +40,7 @@ def train_heads_from_bank(
     model: KneeModel,
     *,
     input_size: int = 224,
+    crop_mm: float | None = None,
     label_source: str = BLENDED_LABEL_SOURCE,
     seed: int = 0,
     log: Callable[[str], None] = print,
@@ -59,6 +60,8 @@ def train_heads_from_bank(
             `{label_source}_{series_type}.pt`.
         model: The feature-extractor model; its head is overwritten per plane.
         input_size: Slice resize target the features were extracted with.
+        crop_mm: Fixed-mm crop the features were extracted with (None = full
+            frame); stamped into checkpoints so inference reproduces it.
         label_source: Provenance string stamped into filenames and checkpoints.
         seed: Head-init seed, so retraining from the same bank is reproducible.
         log: Progress sink (`print` in notebooks).
@@ -95,6 +98,7 @@ def train_heads_from_bank(
             series_type=series_type,
             label_source=label_source,
             n_studies=len(rows),
+            crop_mm=crop_mm,
         )
         log(f"{series_type.value}: head trained on {len(rows)} studies -> {out_path}")
         results.append(
@@ -118,6 +122,7 @@ def train_blended(
     backbone: str = DEFAULT_BACKBONE,
     head_type: HeadType = HeadType.MEAN_MAX,
     input_size: int = 224,
+    crop_mm: float | None = None,
     label_source: str = BLENDED_LABEL_SOURCE,
     log: Callable[[str], None] = print,
 ) -> tuple[FeatureBank, list[BlendedTrainResult]]:
@@ -159,6 +164,7 @@ def train_blended(
         series_types=series_types,
         model=model,
         input_size=input_size,
+        crop_mm=crop_mm,
         log=log,
     )
     results = train_heads_from_bank(
@@ -166,6 +172,7 @@ def train_blended(
         out_dir,
         model,
         input_size=input_size,
+        crop_mm=crop_mm,
         label_source=label_source,
         log=log,
     )

@@ -14,6 +14,7 @@ def write_dicom_slice(
     image_position: tuple[float, float, float] | None = None,
     image_orientation: tuple[float, float, float, float, float, float] | None = None,
     slice_location: float | None = None,
+    pixel_spacing: tuple[float, float] | None = None,
 ) -> None:
     """Write a minimal uncompressed DICOM slice for tests (synthetic — no competition data).
 
@@ -25,6 +26,7 @@ def write_dicom_slice(
         image_orientation: `ImageOrientationPatient` (row then column direction
             cosines), or None to omit.
         slice_location: `SliceLocation` (mm), or None to omit.
+        pixel_spacing: `PixelSpacing` (row_mm, col_mm), or None to omit.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     file_meta = FileMetaDataset()
@@ -48,5 +50,7 @@ def write_dicom_slice(
         dataset.ImageOrientationPatient = list(image_orientation)
     if slice_location is not None:
         dataset.SliceLocation = slice_location
+    if pixel_spacing is not None:
+        dataset.PixelSpacing = list(pixel_spacing)
     dataset.PixelData = pixels.astype(np.uint16).tobytes()
     dataset.save_as(path, enforce_file_format=True)

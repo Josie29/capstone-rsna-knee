@@ -67,6 +67,52 @@ def test_intensities_scale_to_unit_range_per_volume(tmp_path: Path) -> None:
     assert volume.max() <= 1.0
 
 
+def test_crop_mm_gives_every_study_the_same_physical_window(tmp_path: Path) -> None:
+    """Catches the scale bug the crop exists to fix, inverted: the same crop_mm must
+    select the same *millimeters* on scanners with different pixel spacings. If the
+    crop were applied in pixels, a fine-spacing scanner would keep content a
+    coarse-spacing scanner discards, and anatomy scale would still vary per study."""
+    # Bright block 10+ columns right of center (big enough to survive the 0.5%
+    # percentile clip); everything else zero.
+    pixels = np.zeros((32, 32))
+    pixels[12:20, 26:31] = 900
+
+    coarse = tmp_path / "coarse"
+    write_dicom_slice(coarse / "a.dcm", pixels, instance_number=1, pixel_spacing=(1.0, 1.0))
+    fine = tmp_path / "fine"
+    write_dicom_slice(fine / "a.dcm", pixels, instance_number=1, pixel_spacing=(0.5, 0.5))
+
+    # 16mm window: 16px at 1.0mm/px (half-width 8 — pixel at +10 excluded),
+    # 32px at 0.5mm/px (whole frame — pixel included).
+    assert load_volume(coarse, size=16, crop_mm=16.0).max() == 0.0
+    assert load_volume(fine, size=16, crop_mm=16.0).max() == 1.0
+
+
+def test_crop_without_pixel_spacing_keeps_the_full_frame(tmp_path: Path) -> None:
+    """Catches the fallback regressing to a pixel-unit crop or a hard failure — a
+    series without PixelSpacing has no ruler, and silently cropping it by pixels
+    would feed the model an arbitrary physical window."""
+    pixels = np.zeros((32, 32))
+    pixels[12:20, 26:31] = 900
+    write_dicom_slice(tmp_path / "a.dcm", pixels, instance_number=1)  # no PixelSpacing
+
+    volume = load_volume(tmp_path, size=16, crop_mm=16.0)
+    assert volume.max() == 1.0  # edge content survives: full frame was kept
+
+
+def test_crop_larger_than_frame_uses_whole_frame(tmp_path: Path) -> None:
+    """Catches padding/indexing errors on frames smaller than the requested window —
+    a 120mm frame cannot produce a 140mm crop, and fabricating padded anatomy or
+    crashing would both be worse than using what exists."""
+    pixels = np.zeros((32, 32))
+    pixels[0:8, 0:8] = 900  # corner content
+    write_dicom_slice(tmp_path / "a.dcm", pixels, instance_number=1, pixel_spacing=(1.0, 1.0))
+
+    volume = load_volume(tmp_path, size=32, crop_mm=100.0)
+    assert volume.shape == (1, 32, 32)
+    assert volume.max() == 1.0  # corner survives: whole frame used
+
+
 def test_empty_series_dir_is_rejected(tmp_path: Path) -> None:
     """Catches a path-join bug (wrong study/series UID) surfacing as an empty stack
     crash instead of a clear error naming the directory."""

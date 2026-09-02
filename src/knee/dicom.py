@@ -54,15 +54,45 @@ def _slice_sort_key(dataset: pydicom.Dataset, path: Path) -> tuple[int, float, s
     return (3, 0.0, path.name)
 
 
-def _read_slice(path: Path) -> tuple[tuple[int, float, str], np.ndarray]:
-    """Read one .dcm file to (sort key, float32 pixel array).
+def _pixel_spacing(dataset: pydicom.Dataset) -> tuple[float, float] | None:
+    """(row_mm, col_mm) from `PixelSpacing`, or None when absent or malformed."""
+    raw = getattr(dataset, "PixelSpacing", None)
+    if raw is None:
+        return None
+    try:
+        row_mm, col_mm = float(raw[0]), float(raw[1])
+    except (TypeError, ValueError, IndexError):
+        return None
+    if row_mm <= 0 or col_mm <= 0:
+        return None
+    return (row_mm, col_mm)
+
+
+def _crop_center_mm(volume: np.ndarray, spacing: tuple[float, float] | None, crop_mm: float) -> np.ndarray:
+    """Centered fixed-millimeter window across the whole stack.
+
+    Returns the volume untouched when spacing is unknown (no ruler, no crop) and
+    clamps to the frame when it is smaller than the window — a 120mm frame cannot
+    produce a 140mm crop, and padding would fabricate anatomy.
+    """
+    if spacing is None:
+        return volume
+    height = min(volume.shape[1], max(1, round(crop_mm / spacing[0])))
+    width = min(volume.shape[2], max(1, round(crop_mm / spacing[1])))
+    top = (volume.shape[1] - height) // 2
+    left = (volume.shape[2] - width) // 2
+    return volume[:, top : top + height, left : left + width]
+
+
+def _read_slice(path: Path) -> tuple[tuple[int, float, str], np.ndarray, tuple[float, float] | None]:
+    """Read one .dcm file to (sort key, float32 pixel array, pixel spacing).
 
     Args:
         path: The slice file.
 
     Returns:
-        Tuple of the anatomical sort key (see `_slice_sort_key`) and the rescaled
-        pixel array.
+        Tuple of the anatomical sort key (see `_slice_sort_key`), the rescaled
+        pixel array, and the (row_mm, col_mm) pixel spacing when present.
 
     Raises:
         DicomDecodeError: If the file cannot be read or its pixel data cannot be
@@ -80,19 +110,25 @@ def _read_slice(path: Path) -> tuple[tuple[int, float, str], np.ndarray]:
     if slope != 1.0 or intercept != 0.0:
         pixels = pixels * slope + intercept
 
-    return _slice_sort_key(dataset, path), pixels
+    return _slice_sort_key(dataset, path), pixels, _pixel_spacing(dataset)
 
 
-def load_volume(series_dir: Path, *, size: int = 224) -> torch.Tensor:
+def load_volume(series_dir: Path, *, size: int = 224, crop_mm: float | None = None) -> torch.Tensor:
     """Load one series directory into a normalized, resized volume.
 
     Slices are sorted by physical position along the stack normal (see
-    `_slice_sort_key` for the fallback chain), intensity-clipped to the volume's
+    `_slice_sort_key` for the fallback chain), optionally cropped to a centered
+    fixed-millimeter window, intensity-clipped to the (cropped) volume's
     0.5–99.5 percentile range, min-max scaled to [0, 1], and resized.
 
     Args:
         series_dir: Directory holding the series' `<SOPUID>.dcm` files.
         size: Output height/width per slice.
+        crop_mm: Physical window edge in millimeters, converted per study via
+            `PixelSpacing` so every study lands at the same mm-per-pixel scale.
+            None (default) keeps the scanner's full frame. Series without a usable
+            `PixelSpacing` fall back to the full frame; frames smaller than the
+            window are used whole.
 
     Returns:
         Float32 tensor of shape (n_slices, size, size) with values in [0, 1].
@@ -106,7 +142,10 @@ def load_volume(series_dir: Path, *, size: int = 224) -> torch.Tensor:
         raise ValueError(f"No .dcm files in {series_dir}")
 
     ordered = sorted((_read_slice(p) for p in slice_paths), key=lambda item: item[0])
-    volume = np.stack([pixels for _, pixels in ordered])
+    volume = np.stack([pixels for _, pixels, _ in ordered])
+    if crop_mm is not None:
+        # Spacing is uniform within a series in practice; the first slice speaks for all.
+        volume = _crop_center_mm(volume, ordered[0][2], crop_mm)
 
     low, high = np.percentile(volume, _CLIP_PERCENTILES)
     volume = np.clip(volume, low, high)

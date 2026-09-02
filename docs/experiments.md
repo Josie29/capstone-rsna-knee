@@ -17,7 +17,8 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
-| E005b-perlabel-attention | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 + per-label gated attention MIL heads, plane-prior combiner | blended-cv A/B vs mean_max control, same per-slice bank and folds | pending | pending | — | this file (log below), PR #17 |
+| E005a-mm-crop | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 with fixed 140mm center crop (PixelSpacing-derived) | blended-cv, crop margin of the 2x2 run shared with E005b | pending | pending | — | this file (log below), PR #18 |
+| E005b-perlabel-attention | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 + per-label gated attention MIL heads, plane-prior combiner | blended-cv, pooling margin of the 2x2 run shared with E005a | pending | pending | — | this file (log below), PR #17/#18 |
 | E004-dinov2-frozen | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | 3x frozen DINOv2 ViT-S/14 @518 + linear head, plane-prior combiner | blended-cv A/B vs resnet34 @224 (baseline = E003's recorded run) | **0.783** | 0.773 (tie w/ E003) | train ~4h11m T4; scoring rerun ~2h (vs E003's ~25 min) | this file (log below), PR #14, kernels train v8 / inference v5 |
 | E003-blended-labels | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | same arch as E001 (frozen resnet34 + linear heads), soft-target BCE | **new regime**: pooled-OOF 5x5 stratified CV over all blended studies (vs labels thresholded at 0.5) + public LB A/B vs E002 | 0.771 | **0.773** | scoring rerun ~25 min wall | this file (log below), kernels train v6 / inference v4 |
 | E002-plane-prior-combiner | 2026-09-01 | gold-58 checkpoints (unchanged) | E001 models + clinical per-label plane weights | public LB A/B vs E001 | — | 0.692 | — | docs/clinical understanding/plane-abnormality-relevance.md |
@@ -55,6 +56,25 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 - **Outcome (training half, 2026-09-01): blended-cv macro OOF AUC 0.783 vs E003's 0.771 — +0.012, DINOv2 wins the A/B.** Repeat spreads ±0.001 on both arms, so the delta is ~12x the error bar; and it's broad-based (11 of 12 labels moved in DINOv2's favor — the "what a real effect looks like" signature from docs/rsna_brain.md §2.36, not a one-rare-label artifact). Biggest per-label gains: Medial OA 0.820→0.842, Effusion 0.814→0.835, Baker's 0.758→0.778, Medial Meniscus 0.748→0.763; Lateral Meniscus flat at 0.711 — thin-structure labels still trail, consistent with the geometry/ROI hypothesis. Same plane coverage and the same two corrupt-study skips as E003. Cost: ~4h11m T4 vs E003's 75 min (the 518px ViT extraction pass). Verdict for the lever ladder: backbone investment continues — unfreezing (staged fine-tune warm-started from these heads) is the next backbone rung, competing for priority with input geometry. LB pending inference run.
 - **Outcome (submission, 2026-09-02): public LB macro AUC 0.773 — an exact tie with E003, despite the +0.012 CV win.** The training-half verdict above is revised by this: DINOv2's CV gain did not transfer to the clean image-derived LB labels, which is the miner-agreement caveat made concrete — part of that +0.012 was likely "agreeing with the report miner better," not "reading the knee better" (a stronger backbone can fit label noise a linear probe on weaker features cannot). Second read: the public LB has its own noise floor, so a small true gain could hide in a tie — but the burden of proof flipped. Consequences: (1) the CV→LB calibration from E003 (±0.002) does not generalize across architecture changes — blended-cv remains a ranking signal, not a predictor, exactly as DECISIONS.md #5 warned; (2) backbone investment (incl. the unfreeze) is DE-prioritized behind input geometry (E005) and label quality, matching the forum consensus (docs/rsna_brain.md §3.5) that we half-hoped to beat; (3) at equal LB, E003's resnet is strictly better on the efficiency axis (~25 min vs ~2h scoring rerun) — the E003 checkpoints are the production set unless a later experiment separates them; per-label complementarity (dinov2 wins big/diffuse findings on CV) leaves a cheap two-arm ensemble as an open option.
 
+### E005a-mm-crop
+- **Hypothesis:** a fixed 140mm center crop (converted per study via `PixelSpacing`)
+  beats full-frame input at the same 224px: one physical mm-per-pixel scale across
+  all 71 field-of-view variants, every pixel spent on joint instead of thigh and
+  background. Forum grounding (docs/rsna_brain.md §2.35-2.36): crop-geometry fixes
+  measured as real effects (+0.0059, 10/12 labels same direction) where backbone
+  scaling was a null; our own E004 tie points the same way.
+- **Design notes:** crop happens in `load_volume` before percentile normalization
+  (background excluded from the intensity range too); series without a usable
+  `PixelSpacing` fall back to the full frame, frames smaller than the window are
+  used whole, and `crop_mm` is stamped into checkpoints so inference reproduces the
+  training geometry automatically. Known caveat: the rare both-knees-in-one-frame
+  studies (§2.28) may center-crop between the joints — bounded by the full-frame
+  fallback being per-series and the plane sit-out machinery. Runs as the crop
+  margin of a 2x2 kernel run (bank x head type) shared with E005b: four CVs off
+  identical folds, anchored by the full_frame/mean_max cell reproducing E003's
+  0.771; margins attribute each lever, the fourth cell shows interaction.
+- **Outcome:** _pending_
+
 ### E005b-perlabel-attention
 - **Hypothesis:** per-label gated attention MIL pooling beats mean+max on the same
   features — each of the 12 findings learns its own weighting over slices, so
@@ -69,5 +89,6 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
   demo. Decision rule (E004's lesson): submit only if attention's CV macro beats the
   control by more than the per-repeat spread — CV gains may not transfer, and a CV
   null isn't worth a submission. Combiner untouched; learning it from OOF
-  predictions is the follow-up (E005c).
+  predictions is the follow-up (E005c). Runs as the pooling margin of the 2x2
+  kernel run shared with E005a (see its design notes).
 - **Outcome:** _pending_
