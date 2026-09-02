@@ -18,6 +18,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
+| E007-unified-multiplane | 2026-09-02 | blended_v1 soft labels + tier weights / 4,407 / all planes in one bag | ONE MultiPlaneModel: DINOv2 @224 fine-tuned, per-plane embeddings, per-label attention over the cross-plane bag — no combiner | fixed 90/10 holdout (seed 0, paired with E006) | pending (awaits E006 warm-start choice) | pending | — | this file (log below), PR #22 |
 | E006a-tier-weighted-loss | 2026-09-02 | blended_v1 soft labels + per-cell `__weight` companions / 4,407 | best frozen E005 config, per-cell weighted BCE | blended-cv A/B vs unweighted, same bank/folds (zero decode — bank refit) | pending | pending | — | this file (log below), PR #20 |
 | E006-dinov2-stack | 2026-09-02 | blended_v1 soft labels + tier weights / 4,407 / 3 fluid planes | DINOv2 ViT-S/14 @224 fine-tuned end-to-end on 2.5D triplets, crop140, per-label attention, tier-weighted loss | **new regime**: fixed stratified 90/10 holdout (full CV infeasible at one fine-tune per fold); internal control = frozen warm-up epochs on the same split | pending | pending | — | this file (log below), PR #20/#21 |
 | E005a-mm-crop | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 with fixed 140mm center crop (PixelSpacing-derived) | blended-cv, crop margin of the 2x2 run shared with E005b | pending | pending | — | this file (log below), PR #18 |
@@ -134,4 +135,25 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
   concerns). Stratification and AUC stay unweighted — only training listens to
   confidence. Plumbed through all three trainers (frozen linear, attention MIL,
   fine-tune), so if it wins here E006 adopts it as its training loss.
+- **Outcome:** _pending_
+
+### E007-unified-multiplane
+- **Hypothesis:** one model beats the E006 stack of three per-plane specialists at
+  ~1/3 the parameters. Per study, a bag of 2.5D triplets from every available
+  plane flows through one shared fine-tuned DINOv2 backbone, gets a learned
+  per-plane embedding (the "which camera" signal, ~1k params replacing the
+  clinical plane-prior matrix), and per-label attention weighs the whole bag —
+  the learned per-label plane weighting DECISIONS.md #3 promised. Missing planes
+  shrink the bag; the masked softmax renormalizes (what `combiner_weights` did by
+  hand). The shared backbone sees ~13k series instead of ~4.4k per specialist.
+  Matches the strong forum pipelines (docs/rsna_brain.md §2.35: attention over
+  multi-plane sequence slots).
+- **Design notes:** same geometry/labels/loss/split as E006 — the holdout
+  comparison is paired, so the delta is the unification. Warm start from E006's
+  best per-plane checkpoint (backbone + attention head transfer; embeddings start
+  fresh) or cold — set from E006's result. Inference auto-detects the multiplane
+  checkpoint kind; if E007 ships, the plane-prior combiner retires for unified
+  checkpoints (log the per-label plane-attention weights vs the clinical prior
+  table — rediscovered or refuted, either is a finding and a deck beat).
+  Submission gate: clear 0.783 decisively AND beat E006's paired number.
 - **Outcome:** _pending_

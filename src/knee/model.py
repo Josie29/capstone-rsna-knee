@@ -1,4 +1,5 @@
 import functools
+from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -413,6 +414,8 @@ def load_model(path: Path) -> LoadedModel:
             a mismatch would silently scramble every submission column.
     """
     payload: dict[str, Any] = torch.load(path, map_location="cpu", weights_only=True)
+    if payload.get("model_kind") == "multiplane":
+        raise ValueError(f"{path.name} is a multiplane checkpoint; use load_multiplane_model")
     label_columns = tuple(payload["label_columns"])
     if label_columns != LABEL_COLUMNS:
         raise ValueError(f"Checkpoint label order {label_columns} != expected {LABEL_COLUMNS}")
@@ -436,5 +439,211 @@ def load_model(path: Path) -> LoadedModel:
         model=model,
         input_size=int(payload["input_size"]),
         series_type=SeriesType(payload["series_type"]),
+        crop_mm=float(crop_mm) if crop_mm is not None else None,
+    )
+
+
+class MultiPlaneModel(nn.Module):
+    """One model for the whole study: a bag of triplets from every plane, per-label
+    attention over the bag.
+
+    Replaces the three per-plane specialists plus the hand-coded plane-prior
+    combiner (E002: a null): per-label attention over the mixed bag IS the learned
+    per-label plane weighting, and a missing plane simply contributes fewer bag
+    items — the head's masked softmax renormalizes, which is what
+    `combiner_weights` did by hand. A learned per-plane embedding added to each
+    item's features carries the "which camera" signal the per-plane structure used
+    to provide.
+    """
+
+    pixel_mean: torch.Tensor
+    pixel_std: torch.Tensor
+
+    def __init__(
+        self,
+        backbone: str = DEFAULT_BACKBONE,
+        series_types: Sequence[SeriesType] = (
+            SeriesType.SAGITTAL_FLUID,
+            SeriesType.CORONAL_FLUID,
+            SeriesType.AXIAL_FLUID,
+        ),
+        *,
+        pretrained: bool = True,
+        n_anchors: int = 3,
+        image_size: int | None = None,
+    ) -> None:
+        """Build the model.
+
+        Args:
+            backbone: A timm model name.
+            series_types: The planes this model consumes; order defines the plane
+                embedding indices and is persisted in checkpoints.
+            pretrained: Load pretrained backbone weights (False when the state dict
+                comes from a checkpoint, e.g. offline on Kaggle).
+            n_anchors: Triplet count per plane (see `sample_triplets`).
+            image_size: Backbone input-size override (fixed-size ViTs at affordable
+                resolutions); None keeps the backbone's native size.
+
+        Raises:
+            ValueError: If `series_types` is empty or has duplicates.
+        """
+        super().__init__()
+        if not series_types or len(set(series_types)) != len(series_types):
+            raise ValueError(f"series_types must be non-empty and unique, got {list(series_types)}")
+        self.backbone_name = backbone
+        self.series_types = list(series_types)
+        self.n_anchors = n_anchors
+        self.image_size = image_size
+        if image_size is not None:
+            self.backbone = timm.create_model(backbone, pretrained=pretrained, num_classes=0, img_size=image_size)
+        else:
+            self.backbone = timm.create_model(backbone, pretrained=pretrained, num_classes=0)
+        num_features = int(self.backbone.num_features)  # pyright: ignore[reportArgumentType]
+        self.plane_embeddings = nn.Embedding(len(self.series_types), num_features)
+        # Small init: items start nearly plane-agnostic and the signal is learned,
+        # which also keeps warm-started backbones/heads near their loaded behavior.
+        nn.init.normal_(self.plane_embeddings.weight, std=0.02)  # pyright: ignore[reportUnknownMemberType]
+        self.head = PerLabelAttentionHead(num_features)
+        self.register_buffer("pixel_mean", torch.tensor(_IMAGENET_MEAN).view(1, 3, 1, 1))
+        self.register_buffer("pixel_std", torch.tensor(_IMAGENET_STD).view(1, 3, 1, 1))
+
+    def freeze_backbone(self) -> None:
+        """Stop gradients into the backbone (stage A of the staged unfreeze)."""
+        for parameter in self.backbone.parameters():
+            parameter.requires_grad = False
+
+    def bag_features(self, images: torch.Tensor, plane_indices: torch.Tensor) -> torch.Tensor:
+        """Per-item features for a bag: backbone + the item's plane embedding.
+
+        Args:
+            images: (n_items, 3, H, W) float triplet images in [0, 1].
+            plane_indices: (n_items,) long indices into `series_types`.
+
+        Returns:
+            (n_items, num_features) tensor.
+        """
+        features = self.backbone((images - self.pixel_mean) / self.pixel_std)
+        return features + self.plane_embeddings(plane_indices)
+
+    def forward(self, images: torch.Tensor, plane_indices: torch.Tensor) -> torch.Tensor:
+        """Logits for one study's bag, in `LABEL_COLUMNS` order."""
+        return self.head(self.bag_features(images, plane_indices))
+
+    @torch.inference_mode()
+    def predict_study(self, volumes: dict[SeriesType, torch.Tensor]) -> torch.Tensor:
+        """Probabilities for one study from whichever planes it has.
+
+        Args:
+            volumes: Physically-sorted (n_slices, H, W) volumes keyed by plane;
+                absent planes are simply omitted — the bag shrinks.
+
+        Returns:
+            (12,) probabilities in `LABEL_COLUMNS` order.
+
+        Raises:
+            ValueError: If `volumes` is empty (the caller decides the fallback) or
+                contains a plane this model was not built for.
+        """
+        if not volumes:
+            raise ValueError("predict_study needs at least one plane's volume")
+        images: list[torch.Tensor] = []
+        plane_indices: list[int] = []
+        for series_type, volume in volumes.items():
+            if series_type not in self.series_types:
+                raise ValueError(f"Model has no plane embedding for {series_type}")
+            triplets = sample_triplets(volume, n_anchors=self.n_anchors)  # deterministic anchors
+            images.append(triplets)
+            plane_indices.extend([self.series_types.index(series_type)] * triplets.shape[0])
+        bag = torch.cat(images).to(self.pixel_mean.device)
+        indices = torch.tensor(plane_indices, dtype=torch.long, device=self.pixel_mean.device)
+        on_cuda = self.pixel_mean.device.type == "cuda"
+        with torch.autocast("cuda", enabled=on_cuda):
+            logits = self.forward(bag, indices)
+        return torch.sigmoid(logits.float())
+
+
+def save_multiplane_model(
+    model: MultiPlaneModel,
+    path: Path,
+    *,
+    input_size: int,
+    label_source: str = "unspecified",
+    n_studies: int = 0,
+    crop_mm: float | None = None,
+) -> None:
+    """Write a unified multi-plane checkpoint plus reproduction metadata.
+
+    Args:
+        model: The trained model.
+        path: Destination .pt file.
+        input_size: Slice resize target the model was trained with.
+        label_source: Which label set trained this checkpoint.
+        n_studies: Number of studies trained on.
+        crop_mm: Fixed-mm crop the training volumes used (None = full frame).
+    """
+    torch.save(
+        {
+            "model_kind": "multiplane",
+            "state_dict": model.state_dict(),
+            "backbone": model.backbone_name,
+            "series_types": [t.value for t in model.series_types],
+            "input_size": input_size,
+            "label_columns": list(LABEL_COLUMNS),
+            "label_source": label_source,
+            "n_studies": n_studies,
+            "crop_mm": crop_mm,
+            "n_anchors": model.n_anchors,
+            "image_size": model.image_size,
+        },
+        path,
+    )
+
+
+class LoadedMultiPlaneModel(BaseModel):
+    """A unified checkpoint plus the metadata inference needs to feed it correctly."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    model: MultiPlaneModel
+    input_size: int
+    series_types: list[SeriesType]
+    crop_mm: float | None
+
+
+def load_multiplane_model(path: Path) -> LoadedMultiPlaneModel:
+    """Rebuild a model saved by `save_multiplane_model`, without internet access.
+
+    Args:
+        path: The .pt checkpoint.
+
+    Returns:
+        The model in eval mode with its input size, planes, and crop.
+
+    Raises:
+        ValueError: If the checkpoint is not a multiplane checkpoint or its label
+            order does not match `LABEL_COLUMNS`.
+    """
+    payload: dict[str, Any] = torch.load(path, map_location="cpu", weights_only=True)
+    if payload.get("model_kind") != "multiplane":
+        raise ValueError(f"{path.name} is not a multiplane checkpoint; use load_model")
+    label_columns = tuple(payload["label_columns"])
+    if label_columns != LABEL_COLUMNS:
+        raise ValueError(f"Checkpoint label order {label_columns} != expected {LABEL_COLUMNS}")
+    series_types = [SeriesType(value) for value in payload["series_types"]]
+    image_size = payload.get("image_size")
+    model = MultiPlaneModel(
+        payload["backbone"],
+        series_types,
+        pretrained=False,
+        n_anchors=int(payload.get("n_anchors", 3)),
+        image_size=int(image_size) if image_size is not None else None,
+    )
+    model.load_state_dict(payload["state_dict"])
+    model.eval()
+    crop_mm = payload.get("crop_mm")
+    return LoadedMultiPlaneModel(
+        model=model,
+        input_size=int(payload["input_size"]),
+        series_types=series_types,
         crop_mm=float(crop_mm) if crop_mm is not None else None,
     )

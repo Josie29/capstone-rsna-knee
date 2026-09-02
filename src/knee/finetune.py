@@ -18,9 +18,11 @@ from knee.model import (
     HeadType,
     InputMode,
     KneeModel,
+    MultiPlaneModel,
     resolve_device,
     sample_triplets,
     save_model,
+    save_multiplane_model,
 )
 from knee.series import TRAIN_SERIES_DIR, SeriesType, best_series_of_type
 
@@ -397,6 +399,219 @@ def finetune_plane(
     log(f"{series_type.value}: best epoch {best_epoch + 1} (val macro {best_macro:.3f}) -> {out_path}")
     return FinetuneResult(
         series_type=series_type,
+        n_train=len(train_rows),
+        n_val=len(val_rows),
+        best_epoch=best_epoch,
+        best_val_macro_auc=best_macro,
+        val_auc_per_label=best_per_label,
+        checkpoint_path=out_path,
+    )
+
+
+class UnifiedFinetuneResult(BaseModel):
+    """Outcome of fine-tuning the unified multi-plane model."""
+
+    series_types: list[SeriesType]
+    n_train: int
+    n_val: int
+    best_epoch: int
+    best_val_macro_auc: float
+    val_auc_per_label: dict[str, float]
+    checkpoint_path: Path
+
+
+def _study_bag(
+    cache_dir: Path,
+    model: MultiPlaneModel,
+    row: int,
+    config: FinetuneConfig,
+    rng: np.random.Generator | None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """One study's bag: triplets from every cached plane, tagged with plane indices.
+
+    Deterministic anchors when `rng` is None (evaluation); jittered otherwise.
+    """
+    images: list[torch.Tensor] = []
+    plane_indices: list[int] = []
+    for plane_index, series_type in enumerate(model.series_types):
+        stack_file = cache_path(cache_dir, series_type, row)
+        if not stack_file.exists():
+            continue  # plane sits out; the bag shrinks
+        triplets = sample_triplets(
+            _load_stack(stack_file),
+            n_anchors=config.n_anchors,
+            window=config.anchor_window,
+            jitter=config.anchor_jitter if rng is not None else 0.0,
+            rng=rng,
+        )
+        images.append(triplets)
+        plane_indices.extend([plane_index] * triplets.shape[0])
+    return torch.cat(images), torch.tensor(plane_indices, dtype=torch.long)
+
+
+def _evaluate_unified(
+    model: MultiPlaneModel,
+    cache_dir: Path,
+    rows: list[int],
+    binary_targets: np.ndarray,
+    device: str,
+) -> dict[str, float]:
+    """Validation AUC via each study's deterministic bag (the model IS the ensemble)."""
+    model.eval()
+    probabilities: list[np.ndarray] = []
+    for row in rows:
+        volumes = {
+            series_type: _load_stack(cache_path(cache_dir, series_type, row))
+            for series_type in model.series_types
+            if cache_path(cache_dir, series_type, row).exists()
+        }
+        probabilities.append(model.predict_study(volumes).cpu().numpy())
+    return per_label_auc(binary_targets, np.stack(probabilities))
+
+
+def finetune_unified(
+    cache_dir: Path,
+    targets: np.ndarray,
+    val_mask: np.ndarray,
+    *,
+    model: MultiPlaneModel,
+    out_path: Path,
+    config: FinetuneConfig | None = None,
+    input_size: int = 224,
+    crop_mm: float | None = None,
+    cell_weights: np.ndarray | None = None,
+    label_source: str = "blended_v1",
+    log: Callable[[str], None] = print,
+) -> UnifiedFinetuneResult:
+    """Fine-tune the unified multi-plane model end to end on cached 2.5D bags.
+
+    The study-level counterpart of `finetune_plane`: per step, each study
+    contributes one bag (triplets from every cached plane, plane-embedded), padded
+    and masked across the batch. Same staged unfreeze, discriminative LRs, cosine
+    schedule, no-flip augmentation, and best-epoch selection; per-epoch validation
+    uses each study's deterministic bag, so it IS the holdout ensemble number.
+
+    Args:
+        cache_dir: Pixel cache from `build_pixel_cache` (all of the model's planes).
+        targets: (n_studies, 12) float labels aligned with the cache row indices.
+        val_mask: (n_studies,) bool from `stratified_holdout`; True = validation.
+        model: A `MultiPlaneModel`; optionally warm-started before calling.
+        out_path: Destination checkpoint (`save_multiplane_model`).
+        config: Hyperparameters; defaults when omitted.
+        input_size: Stamped into the checkpoint (must match the cache build).
+        crop_mm: Stamped into the checkpoint (must match the cache build).
+        cell_weights: Optional (n_studies, 12) confidence weights; validation stays
+            unweighted.
+        label_source: Provenance string for the checkpoint.
+        log: Progress sink (`print` in notebooks).
+
+    Returns:
+        The result, with per-label validation AUC of the best epoch.
+
+    Raises:
+        ValueError: If either split has no study with a cached plane, or no
+            validation label has both classes.
+    """
+    config = config or FinetuneConfig()
+    cached = [
+        row
+        for row in range(targets.shape[0])
+        if any(cache_path(cache_dir, t, row).exists() for t in model.series_types)
+    ]
+    train_rows = [row for row in cached if not val_mask[row]]
+    val_rows = [row for row in cached if val_mask[row]]
+    if not train_rows or not val_rows:
+        raise ValueError(f"empty split (train {len(train_rows)}, val {len(val_rows)})")
+    binary_val = (targets[val_rows] >= EVAL_THRESHOLD).astype(np.float32)
+    if not any(len(np.unique(binary_val[:, column])) == 2 for column in range(binary_val.shape[1])):
+        raise ValueError("no validation label has both classes; macro AUC would be undefined")
+    train_targets = torch.from_numpy(targets[train_rows])  # pyright: ignore[reportUnknownMemberType]
+
+    device = resolve_device()
+    model.to(device)
+    pos_weight = positive_weight(train_targets).to(device)
+    train_weights = (
+        torch.from_numpy(cell_weights[train_rows])  # pyright: ignore[reportUnknownMemberType]
+        if cell_weights is not None
+        else None
+    )
+    optimizer = torch.optim.AdamW(
+        [
+            {"params": model.backbone.parameters(), "lr": config.backbone_lr},
+            {"params": model.plane_embeddings.parameters(), "lr": config.head_lr},
+            {"params": model.head.parameters(), "lr": config.head_lr},
+        ],
+        weight_decay=config.weight_decay,
+    )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs)
+    rng = np.random.default_rng(config.seed)
+
+    best_macro, best_epoch, best_state, best_per_label = -1.0, -1, None, {}
+    for epoch in range(config.epochs):
+        frozen = epoch < config.frozen_epochs
+        for parameter in model.backbone.parameters():
+            parameter.requires_grad = not frozen
+        model.train()
+        order = [int(i) for i in rng.permutation(len(train_rows))]
+        for start in range(0, len(order), config.batch_studies):
+            batch_indices = order[start : start + config.batch_studies]
+            bags = [
+                _study_bag(cache_dir, model, train_rows[i], config, rng) for i in batch_indices
+            ]
+            bags = [(_augment(images, config, rng), planes) for images, planes in bags]
+            max_items = max(images.shape[0] for images, _ in bags)
+            flat = torch.cat([images for images, _ in bags]).to(device)
+            flat_planes = torch.cat([planes for _, planes in bags]).to(device)
+            optimizer.zero_grad()
+            on_cuda = device == "cuda"
+            with torch.autocast("cuda", enabled=on_cuda):
+                features = model.bag_features(flat, flat_planes).float()
+                # Re-pack variable-length bags into a padded batch for the head.
+                padded = torch.zeros(len(bags), max_items, features.shape[1], device=device)
+                mask = torch.zeros(len(bags), max_items, dtype=torch.bool, device=device)
+                offset = 0
+                for bag_index, (images, _) in enumerate(bags):
+                    count = images.shape[0]
+                    padded[bag_index, :count] = features[offset : offset + count]
+                    mask[bag_index, :count] = True
+                    offset += count
+                logits = model.head(padded, mask)
+                loss = weighted_bce(
+                    logits,
+                    train_targets[torch.as_tensor(batch_indices)].to(device),
+                    pos_weight=pos_weight,
+                    cell_weights=train_weights[torch.as_tensor(batch_indices)].to(device)
+                    if train_weights is not None
+                    else None,
+                )
+            loss.backward()  # pyright: ignore[reportUnknownMemberType]
+            optimizer.step()  # pyright: ignore[reportUnknownMemberType]
+        scheduler.step()
+
+        val_auc = _evaluate_unified(model, cache_dir, val_rows, binary_val, device)
+        defined = [value for value in val_auc.values() if not np.isnan(value)]
+        macro = float(np.mean(defined)) if defined else float("nan")
+        log(f"unified epoch {epoch + 1}/{config.epochs}"
+            f"{' (frozen)' if frozen else ''}: val macro AUC {macro:.3f}")
+        if macro > best_macro:
+            best_macro, best_epoch, best_per_label = macro, epoch, val_auc
+            best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+
+    assert best_state is not None  # the both-classes guard above ensures a finite macro
+    model.load_state_dict(best_state)
+    model.to("cpu")
+    model.eval()
+    save_multiplane_model(
+        model,
+        out_path,
+        input_size=input_size,
+        label_source=label_source,
+        n_studies=len(train_rows),
+        crop_mm=crop_mm,
+    )
+    log(f"unified: best epoch {best_epoch + 1} (val macro {best_macro:.3f}) -> {out_path}")
+    return UnifiedFinetuneResult(
+        series_types=list(model.series_types),
         n_train=len(train_rows),
         n_val=len(val_rows),
         best_epoch=best_epoch,

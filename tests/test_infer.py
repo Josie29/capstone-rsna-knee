@@ -56,6 +56,30 @@ def _checkpoint(path: Path, series_type: SeriesType) -> Path:
     return path
 
 
+def test_unified_checkpoint_predicts_all_studies_without_nan(tmp_path: Path) -> None:
+    """Catches the E007 inference path breaking on the real coverage gaps: a single
+    multiplane checkpoint must fan planes into one bag per study, shrink the bag
+    for missing planes, and emit the 0.5 fallback (never NaN) for the study no
+    plane can read — the same submission-safety contract the ensemble path has."""
+    from knee.model import MultiPlaneModel, save_multiplane_model
+
+    root = _synthetic_test_root(tmp_path)
+    model = MultiPlaneModel(
+        series_types=[SeriesType.SAGITTAL_FLUID, SeriesType.AXIAL_FLUID], pretrained=False
+    )
+    save_multiplane_model(model, tmp_path / "unified.pt", input_size=64)
+
+    frame = predict_studies(root, [tmp_path / "unified.pt"], log=lambda _: None)
+
+    assert list(frame.columns) == list(SUBMISSION_COLUMNS)
+    assert len(frame) == 3
+    values = frame[list(LABEL_COLUMNS)]
+    assert not values.isna().any().any()
+    assert ((values >= 0) & (values <= 1)).all().all()
+    unreadable = frame[frame[STUDY_ID_COLUMN] == "study_unreadable"]
+    assert (unreadable[list(LABEL_COLUMNS)] == 0.5).all().all()
+
+
 def test_ensemble_fans_out_merges_and_never_emits_nan(tmp_path: Path) -> None:
     """Catches the ensemble breaking on the real coverage gaps (~10% of studies lack
     a fluid plane; some series won't decode): a NaN or missing row in submission.csv
