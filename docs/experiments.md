@@ -20,7 +20,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 |---|---|---|---|---|---|---|---|---|
 | E007-dinov2-stack | 2026-09-02 | blended_v1 soft labels + tier weights / 4,407 / 3 fluid planes | DINOv2 ViT-S/14 @224 fine-tuned on 2.5D triplets, crop140, per-label attention, tier-weighted loss | fixed 90/10 holdout (E006 regime); internal control = frozen warm-up epochs on the same split | pending | pending | — | this file (log below), PR #21 |
 | E006a-tier-weighted-loss | 2026-09-02 | blended_v1 soft labels + per-cell `__weight` companions / 4,407 | best frozen E005 config, per-cell weighted BCE | blended-cv A/B vs unweighted, same bank/folds (zero decode — bank refit) | pending | pending | — | this file (log below), PR #20 |
-| E006-finetune | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 fine-tuned end-to-end on 2.5D adjacent-slice triplets, staged unfreeze, warm-started from best E005 heads | **new regime**: fixed stratified 90/10 holdout (full CV infeasible at one fine-tune per fold); frozen E005 winner re-scored on the same split as paired baseline | pending (awaits E005 config) | pending | — | this file (log below), PR #20 |
+| E006-finetune | 2026-09-02 | — | resnet34 fine-tuned on 2.5D triplets (superseded: folded into E007's stack before running) | fixed 90/10 holdout | — (never ran) | — | — | this file (log below), PR #20 |
 | E005a-mm-crop | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 with fixed 140mm center crop (PixelSpacing-derived) | blended-cv, crop margin of the 2x2 run shared with E005b | pending | pending | — | this file (log below), PR #18 |
 | E005b-perlabel-attention | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 + per-label gated attention MIL heads, plane-prior combiner | blended-cv, pooling margin of the 2x2 run shared with E005a | pending | pending | — | this file (log below), PR #17/#18 |
 | E004-dinov2-frozen | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | 3x frozen DINOv2 ViT-S/14 @518 + linear head, plane-prior combiner | blended-cv A/B vs resnet34 @224 (baseline = E003's recorded run) | **0.783** | 0.773 (tie w/ E003) | train ~4h11m T4; scoring rerun ~2h (vs E003's ~25 min) | this file (log below), PR #14, kernels train v8 / inference v5 |
@@ -98,7 +98,12 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 - **Outcome:** _pending_
 
 ### E006-finetune
-- **Hypothesis:** training the backbone end-to-end beats every frozen probe. The
+- **Status: superseded before running (2026-09-02).** Folded into E007's stack — the
+  fine-tuning machinery this row motivated (trainer, triplets, holdout protocol)
+  all ships in E007; a separate resnet fine-tune adds no new information up front.
+  Revive only as a diagnostic if E007 disappoints, to isolate the one question the
+  stack can't: whether the backbone choice (vs the training) is the problem.
+- **Hypothesis (as originally staged):** training the backbone end-to-end beats every frozen probe. The
   student-teacher gap says so: our best model scores 0.773 (LB) while the labels
   that taught it agree with gold at 0.887 — the model has not extracted what the
   labels already contain, so training capacity, not label quality, is the current
