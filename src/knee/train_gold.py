@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 from pydantic import BaseModel
+from torch import nn
 
 from knee.data import gold_studies
 from knee.dicom import DicomDecodeError, load_volume
@@ -110,7 +111,10 @@ def train_gold(
     targets = torch.from_numpy(labels)  # pyright: ignore[reportUnknownMemberType]
 
     model.to("cpu")  # head training on cached features is trivial; keep it simple
-    fit_head(model.head, features, targets)
+    head = model.head
+    if not isinstance(head, nn.Linear):  # this trainer caches pooled features, which only fits mean_max
+        raise TypeError("train_gold supports mean_max heads only; use train_blended for attention")
+    fit_head(head, features, targets)
 
     with torch.no_grad():
         probabilities = torch.sigmoid(model.head(features)).numpy()

@@ -13,10 +13,16 @@ from sklearn.metrics import roc_auc_score  # pyright: ignore[reportUnknownVariab
 from torch import nn
 
 from knee.dicom import DicomDecodeError, load_volume
-from knee.fitting import fit_head
+from knee.fitting import fit_attention_head, fit_head
 from knee.infer import merge_predictions
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
-from knee.model import DEFAULT_BACKBONE, KneeModel, resolve_device
+from knee.model import (
+    DEFAULT_BACKBONE,
+    HeadType,
+    KneeModel,
+    PerLabelAttentionHead,
+    resolve_device,
+)
 from knee.series import TRAIN_SERIES_DIR, SeriesType, best_series_of_type
 
 # The three fluid specialists of the current ensemble (E001/E002/E003).
@@ -36,13 +42,15 @@ _DECODE_WORKERS = 4
 
 
 class FeatureBank(BaseModel):
-    """Cached per-plane study features for a labeled study set.
+    """Cached per-plane, per-slice study features for a labeled study set.
 
     Extract once, train/cross-validate many times: the backbone is frozen, so
     features are a pure function of the pixels and stay valid across fold counts,
     seeds, and repeats. One shared backbone serves every plane — equivalent to the
     per-plane models in training because each of those starts from the same ImageNet
-    weights and never trains its backbone.
+    weights and never trains its backbone. Features are cached *per slice* (pooling
+    deferred to fit time) so any pooler — mean+max or attention — trains from the
+    same bank; `pooled_view` bridges to the mean+max path.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -52,8 +60,9 @@ class FeatureBank(BaseModel):
     # (n_studies, 12) float32 in LABEL_COLUMNS order, aligned with study_uids.
     # Hard 0/1 for gold labels, probabilities in [0, 1] for blended labels.
     labels: np.ndarray
-    # Per plane, aligned with study_uids; None where the study lacks the plane or its
-    # series failed to decode — the plane "sits out" for that study, as in inference.
+    # Per plane, aligned with study_uids: (n_slices_i, feature_dim) matrices, slice
+    # counts varying per study; None where the study lacks the plane or its series
+    # failed to decode — the plane "sits out" for that study, as in inference.
     features: dict[SeriesType, list[torch.Tensor | None]]
 
     def plane_coverage(self) -> dict[SeriesType, int]:
@@ -176,7 +185,7 @@ def collect_features(
                     features[series_type].append(None)
                     continue
                 with torch.no_grad():  # backbone is frozen; cache features once
-                    features[series_type].append(model.pool_features(volume.to(device)).cpu())
+                    features[series_type].append(model.slice_features(volume.to(device)).cpu())
             if (position + 1) % 10 == 0:
                 log(f"extracted {position + 1}/{len(study_uids)}")
 
@@ -188,8 +197,24 @@ def collect_features(
     )
 
 
+def pooled_view(slice_matrix: torch.Tensor) -> torch.Tensor:
+    """Mean+max pooling of one study's slice matrix — the E001-E004 study vector.
+
+    Args:
+        slice_matrix: (n_slices, feature_dim) cached slice features.
+
+    Returns:
+        1-D tensor of length `2 * feature_dim`, identical to what `pool_features`
+        would have produced from the same volume.
+    """
+    return torch.cat([slice_matrix.mean(dim=0), slice_matrix.max(dim=0).values])
+
+
 def save_feature_bank(bank: FeatureBank, path: Path) -> None:
     """Persist a feature bank so head training/CV can rerun without any decoding.
+
+    Slice matrices are stored fp16 to halve the file (~0.5GB at 4.4k studies x 3
+    planes); `load_feature_bank` casts back to fp32.
 
     Args:
         bank: The bank to save.
@@ -200,7 +225,10 @@ def save_feature_bank(bank: FeatureBank, path: Path) -> None:
             "series_types": [t.value for t in bank.series_types],
             "study_uids": bank.study_uids,
             "labels": torch.from_numpy(bank.labels),  # pyright: ignore[reportUnknownMemberType]
-            "features": {t.value: bank.features[t] for t in bank.series_types},
+            "features": {
+                t.value: [f.half() if f is not None else None for f in bank.features[t]]
+                for t in bank.series_types
+            },
         },
         path,
     )
@@ -221,7 +249,10 @@ def load_feature_bank(path: Path) -> FeatureBank:
         series_types=series_types,
         study_uids=[str(uid) for uid in payload["study_uids"]],
         labels=payload["labels"].numpy(),
-        features={t: list(payload["features"][t.value]) for t in series_types},
+        features={
+            t: [f.float() if f is not None else None for f in payload["features"][t.value]]
+            for t in series_types
+        },
     )
 
 
@@ -266,30 +297,67 @@ def _stratified_fold_assignments(labels: np.ndarray, n_splits: int, rng: np.rand
     return assignment
 
 
-def _oof_predictions(bank: FeatureBank, assignment: np.ndarray, head_seed: int) -> np.ndarray:
+def fit_plane_head(
+    slice_features: list[torch.Tensor],
+    targets: torch.Tensor,
+    head_type: HeadType,
+    seed: int,
+) -> nn.Module:
+    """Fit one plane's head of the requested type from cached slice matrices.
+
+    Args:
+        slice_features: Per-study (n_slices_i, feature_dim) matrices for this plane.
+        targets: (n_studies, 12) float labels aligned with `slice_features`.
+        head_type: Which pooling/head family to fit.
+        seed: Head-init/shuffle seed for reproducibility.
+
+    Returns:
+        The trained head in eval mode.
+    """
+    feature_dim = slice_features[0].shape[1]
+    torch.manual_seed(seed)  # pyright: ignore[reportUnknownMemberType] # reproducible head init
+    if head_type is HeadType.ATTENTION:
+        attention = PerLabelAttentionHead(feature_dim)
+        fit_attention_head(attention, slice_features, targets, seed=seed)
+        return attention
+    linear = nn.Linear(2 * feature_dim, len(LABEL_COLUMNS))
+    fit_head(linear, torch.stack([pooled_view(m) for m in slice_features]), targets)
+    return linear
+
+
+def predict_with_head(head: nn.Module, slice_matrix: torch.Tensor) -> np.ndarray:
+    """One study's 12 probabilities from a head fit by `fit_plane_head`."""
+    with torch.no_grad():
+        if isinstance(head, PerLabelAttentionHead):
+            return torch.sigmoid(head(slice_matrix)).numpy()
+        return torch.sigmoid(head(pooled_view(slice_matrix))).numpy()
+
+
+def _oof_predictions(
+    bank: FeatureBank, assignment: np.ndarray, head_seed: int, head_type: HeadType
+) -> np.ndarray:
     """One repeat's pooled OOF matrix: per fold, fit fresh heads and predict held-out.
 
-    Mirrors the production pipeline exactly: per-plane linear heads trained with
-    `fit_head` on the bank's (possibly soft) labels, merged with `merge_predictions`
-    (as in `predict_studies`) — including plane sit-outs and the 0.5 fallback for
-    studies no plane could read.
+    Mirrors the production pipeline exactly: per-plane heads of `head_type` trained
+    on the bank's (possibly soft) labels, merged with `merge_predictions` (as in
+    `predict_studies`) — including plane sit-outs and the 0.5 fallback for studies
+    no plane could read.
     """
     n_studies = bank.labels.shape[0]
     targets = torch.from_numpy(bank.labels)  # pyright: ignore[reportUnknownMemberType]
     oof = np.full((n_studies, len(LABEL_COLUMNS)), np.nan)
     for fold in range(int(assignment.max()) + 1):
         train_indices = np.flatnonzero(assignment != fold)
-        heads: dict[SeriesType, nn.Linear] = {}
+        heads: dict[SeriesType, nn.Module] = {}
         for plane_index, series_type in enumerate(bank.series_types):
             plane_features = bank.features[series_type]
             rows = [int(i) for i in train_indices if plane_features[int(i)] is not None]
             if not rows:
                 continue  # plane absent from this training fold; it sits out
-            stacked = torch.stack([f for i in rows if (f := plane_features[i]) is not None])
-            torch.manual_seed(head_seed * 1000 + fold * 10 + plane_index)  # pyright: ignore[reportUnknownMemberType] # reproducible head init
-            head = nn.Linear(stacked.shape[1], len(LABEL_COLUMNS))
-            fit_head(head, stacked, targets[rows])
-            heads[series_type] = head
+            matrices = [f for i in rows if (f := plane_features[i]) is not None]
+            heads[series_type] = fit_plane_head(
+                matrices, targets[rows], head_type, seed=head_seed * 1000 + fold * 10 + plane_index
+            )
 
         for study in np.flatnonzero(assignment == fold):
             per_model_rows: list[np.ndarray] = []
@@ -299,8 +367,7 @@ def _oof_predictions(bank: FeatureBank, assignment: np.ndarray, head_seed: int) 
                 if feature is None or head is None:
                     per_model_rows.append(np.full(len(LABEL_COLUMNS), np.nan))
                     continue
-                with torch.no_grad():
-                    per_model_rows.append(torch.sigmoid(head(feature)).numpy())
+                per_model_rows.append(predict_with_head(head, feature))
             oof[study] = merge_predictions(np.stack(per_model_rows), bank.series_types)
     return oof
 
@@ -308,6 +375,7 @@ def _oof_predictions(bank: FeatureBank, assignment: np.ndarray, head_seed: int) 
 def cross_validate(
     bank: FeatureBank,
     *,
+    head_type: HeadType = HeadType.MEAN_MAX,
     n_splits: int = 5,
     n_repeats: int = 5,
     seed: int = 0,
@@ -329,6 +397,9 @@ def cross_validate(
 
     Args:
         bank: Cached features from `collect_features` (or `load_feature_bank`).
+        head_type: Pooling/head family to fit per fold — `mean_max` reproduces the
+            E001-E004 pipeline; `attention` fits per-label attention MIL heads. Same
+            folds either way, so results A/B cleanly for a given seed.
         n_splits: Fold count.
         n_repeats: Independent repetitions with reshuffled folds.
         seed: Base seed; fold shuffling and head init derive from it, so results are
@@ -357,7 +428,7 @@ def cross_validate(
     for repeat in range(n_repeats):
         rng = np.random.default_rng(seed + repeat)
         assignment = _stratified_fold_assignments(binary, n_splits, rng)
-        oof = _oof_predictions(bank, assignment, head_seed=seed + repeat)
+        oof = _oof_predictions(bank, assignment, head_seed=seed + repeat, head_type=head_type)
         oof_stack.append(oof)
         for column in defined:
             score = roc_auc_score(binary[:, column], oof[:, column])  # pyright: ignore[reportUnknownArgumentType, reportUnknownVariableType]

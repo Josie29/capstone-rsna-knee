@@ -1,20 +1,21 @@
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import torch
 from pydantic import BaseModel
-from torch import nn
 
 from knee.cv import (
     DEFAULT_CV_SERIES_TYPES,
     EVAL_THRESHOLD,
     FeatureBank,
     collect_features,
+    fit_plane_head,
+    predict_with_head,
 )
-from knee.fitting import fit_head, per_label_auc
-from knee.labels import LABEL_COLUMNS
-from knee.model import DEFAULT_BACKBONE, KneeModel, save_model
+from knee.fitting import per_label_auc
+from knee.model import DEFAULT_BACKBONE, HeadType, KneeModel, save_model
 from knee.series import SeriesType
 
 # Stamped into checkpoints and filenames; bump when the labels dataset revs.
@@ -43,7 +44,8 @@ def train_heads_from_bank(
     seed: int = 0,
     log: Callable[[str], None] = print,
 ) -> list[BlendedTrainResult]:
-    """Fit one linear head per plane from cached features and export checkpoints.
+    """Fit one head per plane (of the model's head type) from cached slice features
+    and export checkpoints.
 
     Heads train on the bank's labels as-is — soft probabilities stay soft targets in
     the BCE loss. Each plane's head is written into `model` and saved as a full
@@ -76,16 +78,13 @@ def train_heads_from_bank(
         rows = [index for index, feature in enumerate(plane_features) if feature is not None]
         if not rows:
             raise ValueError(f"No usable studies for {series_type}; cannot train its head")
-        stacked = torch.stack([f for i in rows if (f := plane_features[i]) is not None])
+        matrices = [f for i in rows if (f := plane_features[i]) is not None]
         targets = torch.from_numpy(bank.labels[rows])  # pyright: ignore[reportUnknownMemberType]
 
-        torch.manual_seed(seed * 100 + plane_index)  # pyright: ignore[reportUnknownMemberType] # reproducible head init
-        head = nn.Linear(stacked.shape[1], len(LABEL_COLUMNS))
-        fit_head(head, stacked, targets)
+        head = fit_plane_head(matrices, targets, model.head_type, seed=seed * 100 + plane_index)
         model.head.load_state_dict(head.state_dict())
 
-        with torch.no_grad():
-            probabilities = torch.sigmoid(head(stacked)).numpy()
+        probabilities = np.stack([predict_with_head(head, matrix) for matrix in matrices])
         binary = (bank.labels[rows] >= EVAL_THRESHOLD).astype("float32")
 
         out_path = out_dir / f"{label_source}_{series_type.value}.pt"
@@ -117,6 +116,7 @@ def train_blended(
     series_types: Sequence[SeriesType] = DEFAULT_CV_SERIES_TYPES,
     model: KneeModel | None = None,
     backbone: str = DEFAULT_BACKBONE,
+    head_type: HeadType = HeadType.MEAN_MAX,
     input_size: int = 224,
     label_source: str = BLENDED_LABEL_SOURCE,
     log: Callable[[str], None] = print,
@@ -135,8 +135,11 @@ def train_blended(
             columns as float probabilities — `load_blended_labels` output.
         out_dir: Directory for the per-plane checkpoints.
         series_types: The ensemble's planes, one specialist each.
-        model: Model to train; a fresh pretrained `KneeModel(backbone)` when omitted.
+        model: Model to train; a fresh pretrained `KneeModel(backbone,
+            head_type=head_type)` when omitted. A passed model's own `head_type`
+            governs — the parameter is ignored.
         backbone: timm model name for the fresh model; ignored when `model` is given.
+        head_type: Head family for the fresh model; ignored when `model` is given.
         input_size: Slice resize target fed to `load_volume`; must match the
             backbone's expectations (fixed-size ViTs reject other sizes).
         label_source: Provenance string stamped into filenames and checkpoints.
@@ -149,7 +152,7 @@ def train_blended(
         ValueError: Propagated from `collect_features` (bad series types) or
             `train_heads_from_bank` (a plane with zero usable studies).
     """
-    model = model or KneeModel(backbone)
+    model = model or KneeModel(backbone, head_type=head_type)
     bank = collect_features(
         comp_root,
         labels,

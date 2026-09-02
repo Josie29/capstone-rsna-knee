@@ -15,7 +15,7 @@ from knee.cv import (
     save_feature_bank,
 )
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
-from knee.model import KneeModel
+from knee.model import HeadType, KneeModel
 from knee.series import SeriesType
 
 _FEATURE_DIM = 16
@@ -38,11 +38,12 @@ def _synthetic_bank(
         labels = np.clip(labels, 0.05, 0.95) + rng.uniform(-0.04, 0.04, labels.shape).astype(np.float32)
     generator = torch.Generator().manual_seed(7)
     series_types = [SeriesType.SAGITTAL_FLUID, SeriesType.AXIAL_FLUID]
+    # Per-slice matrices with deliberately varying slice counts (3-5 per study).
     features = {
         series_type: [
             None
             if study in missing.get(series_type, set())
-            else torch.rand(_FEATURE_DIM, generator=generator)
+            else torch.rand(3 + study % 3, _FEATURE_DIM, generator=generator)
             for study in range(9)
         ]
         for series_type in series_types
@@ -136,10 +137,12 @@ def test_feature_bank_round_trips_through_disk(tmp_path: Path) -> None:
     np.testing.assert_array_equal(loaded.labels, bank.labels)
     for series_type in bank.series_types:
         for original, restored in zip(bank.features[series_type], loaded.features[series_type], strict=True):
-            if original is None:
-                assert restored is None
+            if original is None or restored is None:
+                assert original is None and restored is None
             else:
-                torch.testing.assert_close(original, restored)
+                # Storage is fp16 by contract; a reloaded bank equals the fp16 cast.
+                assert restored.dtype == torch.float32
+                torch.testing.assert_close(original.half().float(), restored)
 
 
 def test_cross_validate_is_complete_and_reproducible() -> None:
@@ -159,6 +162,21 @@ def test_cross_validate_is_complete_and_reproducible() -> None:
     assert len(first.macro_auc_per_repeat) == 2
     assert first.macro_auc == second.macro_auc
     np.testing.assert_array_equal(first.oof_probabilities, second.oof_probabilities)
+
+
+def test_cross_validate_attention_head_is_complete_and_reproducible() -> None:
+    """Catches the attention CV path diverging from the protocol contract — gaps in
+    the OOF matrix or unseeded fits would make the E005b A/B against mean_max
+    meaningless, since the whole comparison rests on identical folds and repeatable
+    numbers."""
+    bank = _synthetic_bank(missing={SeriesType.AXIAL_FLUID: {3}})
+
+    first = cross_validate(bank, head_type=HeadType.ATTENTION, n_splits=3, n_repeats=1, seed=0, log=lambda _: None)
+    second = cross_validate(bank, head_type=HeadType.ATTENTION, n_splits=3, n_repeats=1, seed=0, log=lambda _: None)
+
+    assert not np.isnan(first.oof_probabilities).any()
+    assert 0.0 <= first.macro_auc <= 1.0
+    assert first.macro_auc == second.macro_auc
 
 
 def test_cross_validate_accepts_soft_labels() -> None:
