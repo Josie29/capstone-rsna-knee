@@ -8,7 +8,7 @@ from sklearn.metrics import roc_auc_score  # pyright: ignore[reportUnknownVariab
 from torch import nn
 
 from knee.labels import LABEL_COLUMNS
-from knee.model import PerLabelAttentionHead
+from knee.model import PerLabelAttentionHead, resolve_device
 
 _HEAD_EPOCHS = 300
 _HEAD_LR = 1e-3
@@ -95,10 +95,12 @@ def fit_attention_head(
     head sees exactly the slice features the checkpointed model will compute.
     Mini-batched with per-batch padding because slice counts vary per study; small
     weight decay plus the head's own dropout guard against a learnable pooler
-    fitting miner label noise.
+    fitting miner label noise. Trains on the GPU when one works (the T4 otherwise
+    idles through the CV's ~dozens of fits) and returns the head on CPU, so
+    checkpointing and CPU-side prediction are unaffected.
 
     Args:
-        head: The attention head, trained in place.
+        head: The attention head, trained in place; on CPU when this returns.
         slice_features: Per-study (n_slices_i, feature_dim) matrices, aligned with
             `targets` rows.
         targets: (n_studies, 12) float labels — hard 0/1 or soft probabilities.
@@ -109,7 +111,9 @@ def fit_attention_head(
     """
     if len(slice_features) != targets.shape[0]:
         raise ValueError(f"{len(slice_features)} feature matrices vs {targets.shape[0]} target rows")
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=_positive_weight(targets))
+    device = resolve_device()
+    head.to(device)
+    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=_positive_weight(targets).to(device))
     optimizer = torch.optim.Adam(head.parameters(), lr=_ATTENTION_LR, weight_decay=_ATTENTION_WEIGHT_DECAY)
     generator = torch.Generator().manual_seed(seed)
     head.train()
@@ -119,9 +123,10 @@ def fit_attention_head(
             batch = order[start : start + _ATTENTION_BATCH]
             padded, mask = pad_slice_features([slice_features[int(i)] for i in batch])
             optimizer.zero_grad()
-            loss = loss_fn(head(padded, mask), targets[batch])
+            loss = loss_fn(head(padded.to(device), mask.to(device)), targets[batch].to(device))
             loss.backward()  # pyright: ignore[reportUnknownMemberType]
             optimizer.step()  # pyright: ignore[reportUnknownMemberType]
+    head.to("cpu")
     head.eval()
 
 

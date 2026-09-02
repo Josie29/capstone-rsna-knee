@@ -7,9 +7,10 @@ StudyInstanceUIDs (Competition Data, rule 2.4.b).
 
 Eval protocol note: scores are only comparable within the same protocol. A protocol
 change starts a new comparison regime — mark it clearly. `blended-cv` (current) =
-pooled out-of-fold stratified 5-fold x 5-repeat CV of the full ensemble over all
+pooled out-of-fold stratified 5-fold x 3-repeat CV of the full ensemble over all
 blended-labeled studies, seed 0, AUC vs labels thresholded at 0.5 (`src/knee/cv.py`,
-DECISIONS.md #5); Val AUC cells report its macro mean, with the per-repeat spread in
+DECISIONS.md #5). (E003/E004 ran 5 repeats; reduced to 3 on 2026-09-02 — repeats
+only set the error-bar precision, ~±0.001 at n=4.4k, so means stay comparable.) Val AUC cells report its macro mean, with the per-repeat spread in
 the log entry when it matters. Because the labels are miner-derived, blended-cv
 measures agreement with the report miner, not ground truth — the public LB stays the
 truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure on the

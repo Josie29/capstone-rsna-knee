@@ -382,7 +382,7 @@ def cross_validate(
     *,
     head_type: HeadType = HeadType.MEAN_MAX,
     n_splits: int = 5,
-    n_repeats: int = 5,
+    n_repeats: int = 3,
     seed: int = 0,
     log: Callable[[str], None] = print,
 ) -> CVResult:
@@ -406,7 +406,9 @@ def cross_validate(
             E001-E004 pipeline; `attention` fits per-label attention MIL heads. Same
             folds either way, so results A/B cleanly for a given seed.
         n_splits: Fold count.
-        n_repeats: Independent repetitions with reshuffled folds.
+        n_repeats: Independent repetitions with reshuffled folds. Repeats only set
+            the error-bar precision (measured spread at n=4.4k is ~±0.001), so 3
+            suffices; means stay comparable with earlier 5-repeat rows.
         seed: Base seed; fold shuffling and head init derive from it, so results are
             reproducible for a given bank.
         log: Progress sink (`print` in notebooks).
