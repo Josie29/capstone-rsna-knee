@@ -14,16 +14,55 @@ class DicomDecodeError(RuntimeError):
     """A slice failed to read or decode (missing handler, corrupt file, bad tags)."""
 
 
-def _read_slice(path: Path) -> tuple[tuple[int, int, str], np.ndarray]:
+def _slice_sort_key(dataset: pydicom.Dataset, path: Path) -> tuple[int, float, str]:
+    """Anatomical sort key for one slice, from the most trustworthy signal available.
+
+    Tiers, best first:
+      0. `ImagePositionPatient` projected onto the stack normal (the cross product of
+         `ImageOrientationPatient`'s row and column direction cosines) — pure
+         geometry, correct regardless of file naming or acquisition numbering.
+      1. `SliceLocation` — the same scalar, precomputed by the scanner.
+      2. `InstanceNumber` — acquisition order, which usually matches anatomy.
+      3. Filename — arbitrary but deterministic (SOP-UID names carry no order).
+
+    Malformed geometry tags fall through to the next tier rather than failing the
+    slice: a readable image with a broken position tag is still worth feeding.
+    """
+    orientation = getattr(dataset, "ImageOrientationPatient", None)
+    position = getattr(dataset, "ImagePositionPatient", None)
+    if orientation is not None and position is not None:
+        try:
+            row = np.asarray(orientation[:3], dtype=np.float64)
+            column = np.asarray(orientation[3:], dtype=np.float64)
+            point = np.asarray(position, dtype=np.float64)
+            if row.shape == (3,) and column.shape == (3,) and point.shape == (3,):
+                normal = np.cross(row, column)
+                # Near-zero normal = degenerate orientation (parallel axes); fall through.
+                if float(np.linalg.norm(normal)) > 1e-6:
+                    return (0, float(np.dot(point, normal)), "")
+        except (TypeError, ValueError):
+            pass  # malformed values in the geometry tags; use the next tier
+    location = getattr(dataset, "SliceLocation", None)
+    if location is not None:
+        try:
+            return (1, float(location), "")
+        except (TypeError, ValueError):
+            pass
+    instance_number = getattr(dataset, "InstanceNumber", None)
+    if instance_number is not None:
+        return (2, float(instance_number), "")
+    return (3, 0.0, path.name)
+
+
+def _read_slice(path: Path) -> tuple[tuple[int, float, str], np.ndarray]:
     """Read one .dcm file to (sort key, float32 pixel array).
 
     Args:
         path: The slice file.
 
     Returns:
-        Tuple of the sort key (`InstanceNumber` when present; slices without one sort
-        after those with one, by filename — arbitrary but deterministic) and the
-        rescaled pixel array.
+        Tuple of the anatomical sort key (see `_slice_sort_key`) and the rescaled
+        pixel array.
 
     Raises:
         DicomDecodeError: If the file cannot be read or its pixel data cannot be
@@ -41,18 +80,14 @@ def _read_slice(path: Path) -> tuple[tuple[int, int, str], np.ndarray]:
     if slope != 1.0 or intercept != 0.0:
         pixels = pixels * slope + intercept
 
-    instance_number = getattr(dataset, "InstanceNumber", None)
-    if instance_number is not None:
-        return (0, int(instance_number), ""), pixels
-    # SOP-UID filenames carry no anatomical order; sorting by name is arbitrary but
-    # deterministic (unlike hash(), which is randomized per process).
-    return (1, 0, path.name), pixels
+    return _slice_sort_key(dataset, path), pixels
 
 
 def load_volume(series_dir: Path, *, size: int = 224) -> torch.Tensor:
     """Load one series directory into a normalized, resized volume.
 
-    Slices are sorted by InstanceNumber, intensity-clipped to the volume's
+    Slices are sorted by physical position along the stack normal (see
+    `_slice_sort_key` for the fallback chain), intensity-clipped to the volume's
     0.5–99.5 percentile range, min-max scaled to [0, 1], and resized.
 
     Args:
