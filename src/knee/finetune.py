@@ -11,7 +11,7 @@ from torchvision.transforms import InterpolationMode
 
 from knee.cv import EVAL_THRESHOLD
 from knee.dicom import DicomDecodeError, load_volume
-from knee.fitting import per_label_auc, positive_weight
+from knee.fitting import per_label_auc, positive_weight, weighted_bce
 from knee.labels import STUDY_ID_COLUMN
 from knee.model import (
     HeadType,
@@ -212,6 +212,7 @@ def finetune_plane(
     config: FinetuneConfig | None = None,
     input_size: int = 224,
     crop_mm: float | None = None,
+    cell_weights: np.ndarray | None = None,
     label_source: str = "blended_v1",
     log: Callable[[str], None] = print,
 ) -> FinetuneResult:
@@ -238,6 +239,8 @@ def finetune_plane(
         config: Hyperparameters; defaults when omitted.
         input_size: Stamped into the checkpoint (must match the cache build).
         crop_mm: Stamped into the checkpoint (must match the cache build).
+        cell_weights: Optional (n_studies, 12) confidence weights aligned with
+            `targets` (see `fitting.weighted_bce`); validation stays unweighted.
         label_source: Provenance string for the checkpoint.
         log: Progress sink (`print` in notebooks).
 
@@ -264,7 +267,12 @@ def finetune_plane(
 
     device = resolve_device()
     model.to(device)
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=positive_weight(train_targets).to(device))
+    pos_weight = positive_weight(train_targets).to(device)
+    train_weights = (
+        torch.from_numpy(cell_weights[train_rows])  # pyright: ignore[reportUnknownMemberType]
+        if cell_weights is not None
+        else None
+    )
     optimizer = torch.optim.AdamW(
         [
             {"params": model.backbone.parameters(), "lr": config.backbone_lr},
@@ -308,7 +316,14 @@ def finetune_plane(
             on_cuda = device == "cuda"
             with torch.autocast("cuda", enabled=on_cuda):
                 features = model.triplet_features(flat).view(len(batch_rows), config.n_anchors, -1)
-                loss = loss_fn(_study_logits(model, features.float()), batch_targets)
+                loss = weighted_bce(
+                    _study_logits(model, features.float()),
+                    batch_targets,
+                    pos_weight=pos_weight,
+                    cell_weights=train_weights[torch.as_tensor(batch_indices)].to(device)
+                    if train_weights is not None
+                    else None,
+                )
             loss.backward()  # pyright: ignore[reportUnknownMemberType]
             optimizer.step()  # pyright: ignore[reportUnknownMemberType]
         scheduler.step()

@@ -307,6 +307,7 @@ def fit_plane_head(
     targets: torch.Tensor,
     head_type: HeadType,
     seed: int,
+    cell_weights: torch.Tensor | None = None,
 ) -> nn.Module:
     """Fit one plane's head of the requested type from cached slice matrices.
 
@@ -315,6 +316,8 @@ def fit_plane_head(
         targets: (n_studies, 12) float labels aligned with `slice_features`.
         head_type: Which pooling/head family to fit.
         seed: Head-init/shuffle seed for reproducibility.
+        cell_weights: Optional (n_studies, 12) confidence weights aligned with
+            `targets` (see `fitting.weighted_bce`); None = unweighted.
 
     Returns:
         The trained head in eval mode.
@@ -323,10 +326,10 @@ def fit_plane_head(
     torch.manual_seed(seed)  # pyright: ignore[reportUnknownMemberType] # reproducible head init
     if head_type is HeadType.ATTENTION:
         attention = PerLabelAttentionHead(feature_dim)
-        fit_attention_head(attention, slice_features, targets, seed=seed)
+        fit_attention_head(attention, slice_features, targets, cell_weights=cell_weights, seed=seed)
         return attention
     linear = nn.Linear(2 * feature_dim, len(LABEL_COLUMNS))
-    fit_head(linear, torch.stack([pooled_view(m) for m in slice_features]), targets)
+    fit_head(linear, torch.stack([pooled_view(m) for m in slice_features]), targets, cell_weights=cell_weights)
     return linear
 
 
@@ -366,7 +369,11 @@ def stratified_holdout(labels: np.ndarray, *, val_fraction: float = 0.1, seed: i
 
 
 def _oof_predictions(
-    bank: FeatureBank, assignment: np.ndarray, head_seed: int, head_type: HeadType
+    bank: FeatureBank,
+    assignment: np.ndarray,
+    head_seed: int,
+    head_type: HeadType,
+    cell_weights: np.ndarray | None,
 ) -> np.ndarray:
     """One repeat's pooled OOF matrix: per fold, fit fresh heads and predict held-out.
 
@@ -387,8 +394,17 @@ def _oof_predictions(
             if not rows:
                 continue  # plane absent from this training fold; it sits out
             matrices = [f for i in rows if (f := plane_features[i]) is not None]
+            row_weights = (
+                torch.from_numpy(cell_weights[rows])  # pyright: ignore[reportUnknownMemberType]
+                if cell_weights is not None
+                else None
+            )
             heads[series_type] = fit_plane_head(
-                matrices, targets[rows], head_type, seed=head_seed * 1000 + fold * 10 + plane_index
+                matrices,
+                targets[rows],
+                head_type,
+                seed=head_seed * 1000 + fold * 10 + plane_index,
+                cell_weights=row_weights,
             )
 
         for study in np.flatnonzero(assignment == fold):
@@ -408,6 +424,7 @@ def cross_validate(
     bank: FeatureBank,
     *,
     head_type: HeadType = HeadType.MEAN_MAX,
+    cell_weights: np.ndarray | None = None,
     n_splits: int = 5,
     n_repeats: int = 3,
     seed: int = 0,
@@ -432,6 +449,10 @@ def cross_validate(
         head_type: Pooling/head family to fit per fold — `mean_max` reproduces the
             E001-E004 pipeline; `attention` fits per-label attention MIL heads. Same
             folds either way, so results A/B cleanly for a given seed.
+        cell_weights: Optional (n_studies, 12) confidence weights aligned with the
+            bank's study order (`knee.data.weight_matrix`) — training folds use them
+            in the loss (E006a); stratification and AUC stay unweighted. Same folds
+            with and without, so weighting A/Bs cleanly too.
         n_splits: Fold count.
         n_repeats: Independent repetitions with reshuffled folds. Repeats only set
             the error-bar precision (measured spread at n=4.4k is ~±0.001), so 3
@@ -462,7 +483,9 @@ def cross_validate(
     for repeat in range(n_repeats):
         rng = np.random.default_rng(seed + repeat)
         assignment = _stratified_fold_assignments(binary, n_splits, rng)
-        oof = _oof_predictions(bank, assignment, head_seed=seed + repeat, head_type=head_type)
+        oof = _oof_predictions(
+            bank, assignment, head_seed=seed + repeat, head_type=head_type, cell_weights=cell_weights
+        )
         oof_stack.append(oof)
         for column in defined:
             score = roc_auc_score(binary[:, column], oof[:, column])  # pyright: ignore[reportUnknownArgumentType, reportUnknownVariableType]

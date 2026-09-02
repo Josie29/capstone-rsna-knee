@@ -41,6 +41,7 @@ def train_heads_from_bank(
     *,
     input_size: int = 224,
     crop_mm: float | None = None,
+    cell_weights: np.ndarray | None = None,
     label_source: str = BLENDED_LABEL_SOURCE,
     seed: int = 0,
     log: Callable[[str], None] = print,
@@ -62,6 +63,8 @@ def train_heads_from_bank(
         input_size: Slice resize target the features were extracted with.
         crop_mm: Fixed-mm crop the features were extracted with (None = full
             frame); stamped into checkpoints so inference reproduces it.
+        cell_weights: Optional (n_studies, 12) confidence weights aligned with the
+            bank's study order (`knee.data.weight_matrix`); None = unweighted.
         label_source: Provenance string stamped into filenames and checkpoints.
         seed: Head-init seed, so retraining from the same bank is reproducible.
         log: Progress sink (`print` in notebooks).
@@ -83,8 +86,15 @@ def train_heads_from_bank(
             raise ValueError(f"No usable studies for {series_type}; cannot train its head")
         matrices = [f for i in rows if (f := plane_features[i]) is not None]
         targets = torch.from_numpy(bank.labels[rows])  # pyright: ignore[reportUnknownMemberType]
+        row_weights = (
+            torch.from_numpy(cell_weights[rows])  # pyright: ignore[reportUnknownMemberType]
+            if cell_weights is not None
+            else None
+        )
 
-        head = fit_plane_head(matrices, targets, model.head_type, seed=seed * 100 + plane_index)
+        head = fit_plane_head(
+            matrices, targets, model.head_type, seed=seed * 100 + plane_index, cell_weights=row_weights
+        )
         model.head.load_state_dict(head.state_dict())
 
         probabilities = np.stack([predict_with_head(head, matrix) for matrix in matrices])
