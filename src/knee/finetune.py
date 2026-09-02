@@ -12,6 +12,7 @@ from torchvision.transforms import InterpolationMode
 from knee.cv import EVAL_THRESHOLD
 from knee.dicom import DicomDecodeError, load_volume
 from knee.fitting import per_label_auc, positive_weight, weighted_bce
+from knee.infer import merge_predictions
 from knee.labels import STUDY_ID_COLUMN
 from knee.model import (
     HeadType,
@@ -199,6 +200,49 @@ def _evaluate(
             logits = _study_logits(model, features)
             probabilities.append(torch.sigmoid(logits.float()).squeeze(0).cpu().numpy())
     return per_label_auc(binary_targets, np.stack(probabilities))
+
+
+def evaluate_ensemble_holdout(
+    cache_dir: Path,
+    models: dict[SeriesType, KneeModel],
+    targets: np.ndarray,
+    val_mask: np.ndarray,
+) -> dict[str, float]:
+    """Fine-tuned ensemble AUC on the validation split.
+
+    The paired counterpart to `cv.evaluate_holdout`: same split, same combiner
+    (`merge_predictions`, plane sit-outs included), but predictions come from the
+    fine-tuned per-plane models via their own deterministic triplet sampling — so
+    frozen-vs-finetuned ensemble numbers differ only in the training.
+
+    Args:
+        cache_dir: Pixel cache the models were trained from.
+        models: One fine-tuned model per plane (e.g. reloaded via `load_model`).
+        targets: (n_studies, 12) float labels aligned with the cache's row indices.
+        val_mask: (n_studies,) bool, True = validation.
+
+    Returns:
+        Label name -> validation AUC vs labels thresholded at `EVAL_THRESHOLD`.
+    """
+    device = resolve_device()
+    for model in models.values():
+        model.to(device)
+        model.eval()
+    series_types = list(models)
+    predictions: list[np.ndarray] = []
+    with torch.no_grad():
+        for row in np.flatnonzero(val_mask):
+            per_model_rows: list[np.ndarray] = []
+            for series_type in series_types:
+                stack_file = cache_path(cache_dir, series_type, int(row))
+                if not stack_file.exists():
+                    per_model_rows.append(np.full(targets.shape[1], np.nan))
+                    continue
+                stack = _load_stack(stack_file).to(device)
+                per_model_rows.append(models[series_type].predict_study(stack).cpu().numpy())
+            predictions.append(merge_predictions(np.stack(per_model_rows), series_types))
+    binary = (targets[val_mask] >= EVAL_THRESHOLD).astype(np.float32)
+    return per_label_auc(binary, np.stack(predictions))
 
 
 def finetune_plane(
