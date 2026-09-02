@@ -338,6 +338,33 @@ def predict_with_head(head: nn.Module, slice_matrix: torch.Tensor) -> np.ndarray
         return torch.sigmoid(head(pooled_view(slice_matrix))).numpy()
 
 
+def stratified_holdout(labels: np.ndarray, *, val_fraction: float = 0.1, seed: int = 0) -> np.ndarray:
+    """One stratified validation mask, for regimes where full CV is infeasible.
+
+    Reuses the multi-label fold assigner: splits into round(1/val_fraction) folds
+    and takes fold 0 as validation, so rare labels land on both sides of the split
+    with the same guarantee the CV protocol gives.
+
+    Args:
+        labels: (n_studies, 12) labels; soft values are thresholded at
+            `EVAL_THRESHOLD` for stratification.
+        val_fraction: Approximate validation share.
+        seed: Assignment seed, so every arm of an experiment shares the split.
+
+    Returns:
+        (n_studies,) bool mask, True = validation.
+
+    Raises:
+        ValueError: If `val_fraction` is not in (0, 0.5].
+    """
+    if not 0 < val_fraction <= 0.5:
+        raise ValueError(f"val_fraction must be in (0, 0.5], got {val_fraction}")
+    binary = (labels >= EVAL_THRESHOLD).astype(np.float32)
+    n_splits = round(1 / val_fraction)
+    assignment = _stratified_fold_assignments(binary, n_splits, np.random.default_rng(seed))
+    return assignment == 0
+
+
 def _oof_predictions(
     bank: FeatureBank, assignment: np.ndarray, head_seed: int, head_type: HeadType
 ) -> np.ndarray:

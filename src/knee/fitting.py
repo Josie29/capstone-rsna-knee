@@ -22,7 +22,7 @@ _ATTENTION_BATCH = 128
 _ATTENTION_WEIGHT_DECAY = 1e-4
 
 
-def _positive_weight(targets: torch.Tensor) -> torch.Tensor:
+def positive_weight(targets: torch.Tensor) -> torch.Tensor:
     """Per-label BCE pos_weight so rare findings aren't drowned out.
 
     On soft labels the counts become expected counts, which weights the same way.
@@ -70,7 +70,7 @@ def fit_head(head: nn.Linear, features: torch.Tensor, targets: torch.Tensor) -> 
         targets: (n_studies, 12) float labels — hard 0/1 or soft probabilities;
             BCE accepts both.
     """
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=_positive_weight(targets))
+    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=positive_weight(targets))
 
     optimizer = torch.optim.Adam(head.parameters(), lr=_HEAD_LR)
     head.train()
@@ -113,7 +113,7 @@ def fit_attention_head(
         raise ValueError(f"{len(slice_features)} feature matrices vs {targets.shape[0]} target rows")
     device = resolve_device()
     head.to(device)
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=_positive_weight(targets).to(device))
+    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=positive_weight(targets).to(device))
     optimizer = torch.optim.Adam(head.parameters(), lr=_ATTENTION_LR, weight_decay=_ATTENTION_WEIGHT_DECAY)
     generator = torch.Generator().manual_seed(seed)
     head.train()

@@ -3,6 +3,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import timm
 import torch
 from pydantic import BaseModel, ConfigDict
@@ -17,6 +18,64 @@ class HeadType(StrEnum):
 
     MEAN_MAX = "mean_max"  # E001-E004: mean+max pool across slices, one linear layer
     ATTENTION = "attention"  # E005b: per-label gated-attention MIL pooling
+
+
+class InputMode(StrEnum):
+    """What the backbone sees per study."""
+
+    SLICES = "slices"  # E001-E005: every gray slice, repeated to 3 channels
+    TRIPLETS = "triplets"  # E006: K anchor images, channels = adjacent slices (2.5D)
+
+
+def sample_triplets(
+    volume: torch.Tensor,
+    *,
+    n_anchors: int = 3,
+    window: tuple[float, float] = (0.2, 0.8),
+    jitter: float = 0.0,
+    rng: np.random.Generator | None = None,
+) -> torch.Tensor:
+    """K anchor images whose channels are physically adjacent slices (2.5D input).
+
+    Anchors are spread evenly across the central window of the (physically sorted)
+    stack; each anchor's neighbors [i-1, i, i+1] become the R/G/B channels of one
+    image, so a real finding — which persists across neighbors — is visible to the
+    backbone in a single forward. Edge anchors clamp, so a 1-2 slice stack degrades
+    to repeated slices (the old gray->3ch behavior) rather than failing.
+
+    Args:
+        volume: (n_slices, H, W) float tensor in [0, 1], physically sorted.
+        n_anchors: Number of anchor images (K).
+        window: Fractional range of the stack anchors are drawn from — findings
+            live near the joint, edge slices are mostly muscle.
+        jitter: Fractional anchor jitter; free augmentation during training.
+        rng: Jitter source; None (inference) means deterministic anchors.
+
+    Returns:
+        (n_anchors, 3, H, W) tensor.
+
+    Raises:
+        ValueError: If `volume` is not 3-D or has zero slices.
+    """
+    if volume.ndim != 3 or volume.shape[0] == 0:
+        raise ValueError(f"Expected non-empty (n_slices, H, W) volume, got {tuple(volume.shape)}")
+    n_slices = volume.shape[0]
+    positions = np.linspace(window[0], window[1], n_anchors) * (n_slices - 1)
+    if rng is not None and jitter > 0:
+        positions = positions + rng.uniform(-jitter, jitter, n_anchors) * n_slices
+    anchors = np.clip(np.round(positions), 0, n_slices - 1).astype(int)
+    return torch.stack(
+        [
+            torch.stack(
+                [
+                    volume[max(anchor - 1, 0)],
+                    volume[anchor],
+                    volume[min(anchor + 1, n_slices - 1)],
+                ]
+            )
+            for anchor in anchors
+        ]
+    )
 
 # ImageNet statistics — required because the backbone starts from ImageNet weights.
 _IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -150,6 +209,8 @@ class KneeModel(nn.Module):
         *,
         pretrained: bool = True,
         head_type: HeadType = HeadType.MEAN_MAX,
+        input_mode: InputMode = InputMode.SLICES,
+        n_anchors: int = 3,
     ) -> None:
         """Build the model.
 
@@ -160,10 +221,15 @@ class KneeModel(nn.Module):
                 where downloads are impossible).
             head_type: How per-slice features become logits; must match the head the
                 checkpoint was trained with when loading one.
+            input_mode: What the backbone sees per study — every gray slice, or
+                `n_anchors` adjacent-slice triplet images (2.5D).
+            n_anchors: Triplet count when `input_mode` is TRIPLETS; ignored otherwise.
         """
         super().__init__()
         self.backbone_name = backbone
         self.head_type = HeadType(head_type)
+        self.input_mode = InputMode(input_mode)
+        self.n_anchors = n_anchors
         self.backbone = timm.create_model(backbone, pretrained=pretrained, num_classes=0)
         # nn.Module attribute access types as Tensor | Module; timm guarantees an int here.
         num_features = int(self.backbone.num_features)  # pyright: ignore[reportArgumentType]
@@ -221,11 +287,32 @@ class KneeModel(nn.Module):
         per_slice = self.slice_features(volume)
         return torch.cat([per_slice.mean(dim=0), per_slice.max(dim=0).values])
 
+    def triplet_features(self, images: torch.Tensor) -> torch.Tensor:
+        """Backbone features for already-3-channel images (the 2.5D triplet path).
+
+        Args:
+            images: (n_images, 3, H, W) float tensor in [0, 1] — e.g. from
+                `sample_triplets`. Unlike `slice_features`, channels carry three
+                *different* adjacent slices, so no gray->3ch repeat happens here.
+
+        Returns:
+            (n_images, backbone.num_features) tensor.
+        """
+        return self.backbone((images - self.pixel_mean) / self.pixel_std)
+
+    def _head_logits(self, per_item_features: torch.Tensor) -> torch.Tensor:
+        """Route per-item (slice or triplet) features through the configured head."""
+        if self.head_type is HeadType.ATTENTION:
+            return self.head(per_item_features)
+        pooled = torch.cat([per_item_features.mean(dim=0), per_item_features.max(dim=0).values])
+        return self.head(pooled)
+
     def forward(self, volume: torch.Tensor) -> torch.Tensor:
         """Logits for one study's volume, in `LABEL_COLUMNS` order."""
-        if self.head_type is HeadType.ATTENTION:
-            return self.head(self.slice_features(volume))
-        return self.head(self.pool_features(volume))
+        if self.input_mode is InputMode.TRIPLETS:
+            images = sample_triplets(volume, n_anchors=self.n_anchors)  # deterministic anchors
+            return self._head_logits(self.triplet_features(images))
+        return self._head_logits(self.slice_features(volume))
 
     @torch.inference_mode()
     def predict_study(self, volume: torch.Tensor) -> torch.Tensor:
@@ -295,6 +382,8 @@ def save_model(
             "n_studies": n_studies,
             "head_type": model.head_type.value,
             "crop_mm": crop_mm,
+            "input_mode": model.input_mode.value,
+            "n_anchors": model.n_anchors,
         },
         path,
     )
@@ -317,9 +406,17 @@ def load_model(path: Path) -> LoadedModel:
     label_columns = tuple(payload["label_columns"])
     if label_columns != LABEL_COLUMNS:
         raise ValueError(f"Checkpoint label order {label_columns} != expected {LABEL_COLUMNS}")
-    # Checkpoints from before E005b carry no head_type; they are all mean_max.
+    # Checkpoints from before E005b/E006 carry no head_type/input_mode; they are
+    # all mean_max over gray slices.
     head_type = HeadType(payload.get("head_type", HeadType.MEAN_MAX.value))
-    model = KneeModel(payload["backbone"], pretrained=False, head_type=head_type)
+    input_mode = InputMode(payload.get("input_mode", InputMode.SLICES.value))
+    model = KneeModel(
+        payload["backbone"],
+        pretrained=False,
+        head_type=head_type,
+        input_mode=input_mode,
+        n_anchors=int(payload.get("n_anchors", 3)),
+    )
     model.load_state_dict(payload["state_dict"])
     model.eval()
     crop_mm = payload.get("crop_mm")  # pre-E005a checkpoints trained on full frames
