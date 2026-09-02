@@ -45,6 +45,8 @@ When a milestone lands (results, a pivot, a new insight), consider whether
 - Experiments: ID `E###-short-slug`; add the `docs/experiments.md` row + hypothesis when
   starting one, fill the outcome when it resolves. Raw runs/curves go to wandb
   (`rsna-knee` project) — the markdown file is the curated story, not a run dump.
+- Keep as much train/inference logic in `src/knee/` modules as you can, not notebooks — .py files diff and
+  review cleanly; .ipynb files don't.
 - Notebooks: thin shells over `src/knee/`; strip outputs before commit
   (`jupyter nbconvert --clear-output --inplace <nb>`); Kaggle kernels are deployed
   push-only via `kaggle kernels push` — never edited in the Kaggle web UI. Details in
