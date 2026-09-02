@@ -8,7 +8,13 @@ import torch
 
 from knee.dicom import DicomDecodeError, load_volume
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN, SUBMISSION_COLUMNS, Label
-from knee.model import LoadedModel, load_model, resolve_device
+from knee.model import (
+    LoadedModel,
+    LoadedMultiPlaneModel,
+    load_model,
+    load_multiplane_model,
+    resolve_device,
+)
 from knee.plane_prior import combiner_weights
 from knee.series import SeriesType, best_series_of_type
 
@@ -102,6 +108,17 @@ def predict_studies(
     """
     if not checkpoint_paths:
         raise ValueError("predict_studies needs at least one checkpoint")
+    if len(checkpoint_paths) == 1:
+        # A single unified checkpoint (E007+) takes the multiplane path: one model,
+        # a bag of planes per study, no combiner.
+        try:
+            unified = load_multiplane_model(checkpoint_paths[0])
+        except ValueError as exc:
+            if "not a multiplane checkpoint" not in str(exc):
+                raise  # a real defect (e.g. label order) must not be masked
+            unified = None
+        if unified is not None:
+            return _predict_studies_unified(comp_root, unified, log=log)
     models = [load_model(path) for path in checkpoint_paths]
     types = [m.series_type for m in models]
     if len(set(types)) != len(types):
@@ -144,6 +161,73 @@ def predict_studies(
             if np.isnan(per_model).all():
                 log(f"no model could read study {study_uid}; emitting {_FALLBACK_PROBABILITY}")
             rows.append([study_uid, *merge_predictions(per_model, types).tolist()])
+            if position % 100 == 0:
+                log(f"predicted {position}/{len(study_uids)}")
+
+    frame = pd.DataFrame(rows, columns=list(SUBMISSION_COLUMNS))
+    if frame.isna().any().any():  # belt and braces: NaN scores as an invalid submission
+        raise ValueError("NaN survived into the submission frame")
+    return frame
+
+
+def _predict_studies_unified(
+    comp_root: Path,
+    loaded: LoadedMultiPlaneModel,
+    *,
+    log: Callable[[str], None] = print,
+) -> pd.DataFrame:
+    """Unified-model inference: one bag of planes per study, no combiner.
+
+    Per study, the best series of each of the checkpoint's planes decodes (with
+    the checkpoint's own crop/size); planes that are missing or fail to decode are
+    simply absent from the bag — the model's masked attention renormalizes. A study
+    with no readable plane gets the sample-submission constant, never NaN.
+    """
+    device = resolve_device()
+    loaded.model.to(device)
+    log(f"unified model ({[t.value for t in loaded.series_types]}) on {device}")
+
+    test_df = pd.read_csv(comp_root / "test.csv")
+    series_df = pd.read_csv(comp_root / "test_series.csv")
+    study_uids = [str(uid) for uid in test_df[STUDY_ID_COLUMN]]
+
+    def decode_plane(study_uid: str, series_type: SeriesType) -> torch.Tensor | None:
+        study_series = series_df[series_df[STUDY_ID_COLUMN] == study_uid]
+        series_uid = best_series_of_type(study_series, series_type)
+        if series_uid is None:
+            return None
+        try:
+            return load_volume(
+                comp_root / TEST_SERIES_DIR / study_uid / series_uid,
+                size=loaded.input_size,
+                crop_mm=loaded.crop_mm,
+            )
+        except (ValueError, DicomDecodeError) as exc:
+            log(f"{series_type}: skipping series {series_uid}: {exc}")
+            return None
+
+    rows: list[list[object]] = []
+    with ThreadPoolExecutor(max_workers=_DECODE_WORKERS) as executor:
+
+        def submit_decodes(study_uid: str) -> list[Future[torch.Tensor | None]]:
+            return [executor.submit(decode_plane, study_uid, t) for t in loaded.series_types]
+
+        pending = submit_decodes(study_uids[0]) if study_uids else []
+        for position, study_uid in enumerate(study_uids, start=1):
+            volumes = {
+                series_type: volume
+                for series_type, volume in zip(loaded.series_types, [f.result() for f in pending], strict=True)
+                if volume is not None
+            }
+            if position < len(study_uids):
+                # Queue the next study's decodes so they overlap the forward below.
+                pending = submit_decodes(study_uids[position])
+            if not volumes:
+                log(f"no plane could be read for study {study_uid}; emitting {_FALLBACK_PROBABILITY}")
+                probabilities = np.full(len(LABEL_COLUMNS), _FALLBACK_PROBABILITY)
+            else:
+                probabilities = loaded.model.predict_study(volumes).cpu().numpy()
+            rows.append([study_uid, *probabilities.tolist()])
             if position % 100 == 0:
                 log(f"predicted {position}/{len(study_uids)}")
 
