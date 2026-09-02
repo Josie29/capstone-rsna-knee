@@ -74,6 +74,9 @@ def test_attention_learns_to_find_the_signal_slice() -> None:
     torch.manual_seed(2)  # pyright: ignore[reportUnknownMemberType] # deterministic head init
     head = PerLabelAttentionHead(_DIM)
     fit_attention_head(head, [bag for bag, _ in train], train_targets, seed=2)
+    # Contract: training may use the GPU, but the head comes back on CPU so
+    # checkpointing and CPU-side prediction never care where it trained.
+    assert all(p.device.type == "cpu" for p in head.parameters())
 
     with torch.no_grad():
         probabilities = torch.stack([torch.sigmoid(head(bag)) for bag, _ in test])
