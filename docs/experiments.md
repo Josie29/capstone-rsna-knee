@@ -19,7 +19,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
 | E006a-tier-weighted-loss | 2026-09-02 | blended_v1 soft labels + per-cell `__weight` companions / 4,407 | best frozen E005 config, per-cell weighted BCE | blended-cv A/B vs unweighted, same bank/folds (zero decode — bank refit) | pending | pending | — | this file (log below), PR #20 |
-| E006-finetune | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 fine-tuned end-to-end on 2.5D adjacent-slice triplets, staged unfreeze, warm-started from best E005 heads | **new regime**: fixed stratified 90/10 holdout (full CV infeasible at one fine-tune per fold); frozen E005 winner re-scored on the same split as paired baseline | pending (awaits E005 config) | pending | — | this file (log below), PR #20 |
+| E006-dinov2-stack | 2026-09-02 | blended_v1 soft labels + tier weights / 4,407 / 3 fluid planes | DINOv2 ViT-S/14 @224 fine-tuned end-to-end on 2.5D triplets, crop140, per-label attention, tier-weighted loss | **new regime**: fixed stratified 90/10 holdout (full CV infeasible at one fine-tune per fold); internal control = frozen warm-up epochs on the same split | pending | pending | — | this file (log below), PR #20/#21 |
 | E005a-mm-crop | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 with fixed 140mm center crop (PixelSpacing-derived) | blended-cv, crop margin of the 2x2 run shared with E005b | pending | pending | — | this file (log below), PR #18 |
 | E005b-perlabel-attention | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 + per-label gated attention MIL heads, plane-prior combiner | blended-cv, pooling margin of the 2x2 run shared with E005a | pending | pending | — | this file (log below), PR #17/#18 |
 | E004-dinov2-frozen | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | 3x frozen DINOv2 ViT-S/14 @518 + linear head, plane-prior combiner | blended-cv A/B vs resnet34 @224 (baseline = E003's recorded run) | **0.783** | 0.773 (tie w/ E003) | train ~4h11m T4; scoring rerun ~2h (vs E003's ~25 min) | this file (log below), PR #14, kernels train v8 / inference v5 |
@@ -96,27 +96,27 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
   kernel run shared with E005a (see its design notes).
 - **Outcome:** _pending_
 
-### E006-finetune
-- **Hypothesis:** training the backbone end-to-end beats every frozen probe. The
-  student-teacher gap says so: our best model scores 0.773 (LB) while the labels
-  that taught it agree with gold at 0.887 — the model has not extracted what the
-  labels already contain, so training capacity, not label quality, is the current
-  binding constraint. The entire public-notebook plateau (~0.87) is fine-tuned
-  CNNs, and practitioner guidance says score tracks how much of the backbone is
-  unfrozen (docs/rsna_brain.md §2.31). E004's null was about frozen-feature
-  *choice*, not feature *training* — different levers.
-- **Design notes:** 2.5D inputs — K=3 anchor images per series, channels = physically
-  adjacent slices (needs PR #16's sort), from a uint8 pixel cache built once with
-  the E005a crop machinery (`build_pixel_cache`); staged unfreeze (2 frozen epochs,
-  then backbone at 1/10 the head LR, cosine schedule); augmentation without
-  horizontal flips (mirroring swaps medial/lateral anatomy under fixed labels);
-  best-epoch selection on a fixed stratified 90/10 holdout (`stratified_holdout`),
-  which is the regime marker — full CV would cost one fine-tune per fold. Heads
-  warm-start from the winning E005 cell; `input_mode`/`n_anchors` ride in the
-  checkpoint so inference reproduces the triplet sampling automatically. Final
-  config (crop_mm, head type) set by the E005 2x2 result before the kernel run.
+### E006-dinov2-stack
+- **Hypothesis:** stacking every individually-evidenced lever — DINOv2 features
+  (E004: best CV recorded), end-to-end fine-tuning (student-teacher gap: model
+  0.773 vs teacher labels' 0.887 gold agreement), 2.5D adjacent-slice triplets +
+  140mm crop (forum §2.35-2.36 measured wins), per-label attention
+  (thin-structure floor), and tier-weighted loss (Ryan's methodology) — beats
+  every frozen number. **Attribution knowingly traded for speed** (team decision
+  2026-09-02): each lever is separately evidenced, untangling a disappointment
+  falls to the E005 single-lever rows plus this run's internal control — the
+  frozen warm-up epochs' val score, a frozen-DINO-triplet baseline on the same
+  split. Not gated on the E005 2x2 readout.
+- **Design notes:** ViT runs at 224 via position-embedding interpolation
+  (`image_size` override, stored in the checkpoint; fine-tuning at native 518
+  would need a ~100GB pixel cache — E004's null was about frozen features at 518,
+  a different lever than training). Heads cold-start: E005's resnet heads are
+  512-d and don't fit 384-d ViT features. One decode pass; fixed 90/10 holdout
+  seed 0, shared with all fine-tune-era rows. Staged unfreeze (2 frozen epochs,
+  backbone at 1/10 head LR, cosine), augmentation without horizontal flips,
+  best-epoch selection on val macro. Submission gate: holdout ensemble macro must
+  clear 0.783 decisively.
 - **Outcome:** _pending_
-
 ### E006a-tier-weighted-loss
 - **Hypothesis:** weighting each label cell by Ryan's per-cell confidence weight
   (docs/modeling understanding/blended-labels-methodology.md: tier 1 explicit

@@ -112,6 +112,25 @@ def test_finetune_plane_end_to_end(tmp_path: Path) -> None:
     assert probs.shape == (len(LABEL_COLUMNS),)
 
 
+def test_ensemble_holdout_covers_missing_planes(tmp_path: Path) -> None:
+    """Catches the fine-tuned ensemble eval diverging from the production combiner —
+    a study whose plane has no cached stack must fall back through the plane
+    sit-out path, not crash or skew the paired frozen-vs-finetuned comparison."""
+    from knee.finetune import evaluate_ensemble_holdout
+
+    targets = _synthetic_cache(tmp_path, 8, SeriesType.SAGITTAL_FLUID)
+    cache_path(tmp_path, SeriesType.SAGITTAL_FLUID, 0).unlink()  # study 0 loses its plane
+    val_mask = np.zeros(8, dtype=bool)
+    val_mask[[0, 1, 2]] = True
+
+    model = KneeModel(pretrained=False, input_mode=InputMode.TRIPLETS)
+    model.eval()
+    scores = evaluate_ensemble_holdout(tmp_path, {SeriesType.SAGITTAL_FLUID: model}, targets, val_mask)
+
+    assert set(scores) == set(LABEL_COLUMNS)
+    assert all(np.isnan(v) or 0.0 <= v <= 1.0 for v in scores.values())
+
+
 def test_finetune_rejects_slice_mode_models(tmp_path: Path) -> None:
     """Catches silently fine-tuning a slices-mode model on triplet batches — the
     training input and the checkpoint's inference path would disagree, producing a

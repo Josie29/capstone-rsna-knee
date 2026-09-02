@@ -13,7 +13,7 @@ from sklearn.metrics import roc_auc_score  # pyright: ignore[reportUnknownVariab
 from torch import nn
 
 from knee.dicom import DicomDecodeError, load_volume
-from knee.fitting import fit_attention_head, fit_head
+from knee.fitting import fit_attention_head, fit_head, per_label_auc
 from knee.infer import merge_predictions
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 from knee.model import (
@@ -418,6 +418,67 @@ def _oof_predictions(
                 per_model_rows.append(predict_with_head(head, feature))
             oof[study] = merge_predictions(np.stack(per_model_rows), bank.series_types)
     return oof
+
+
+def evaluate_holdout(
+    bank: FeatureBank,
+    val_mask: np.ndarray,
+    *,
+    head_type: HeadType = HeadType.MEAN_MAX,
+    cell_weights: np.ndarray | None = None,
+    seed: int = 0,
+) -> dict[str, float]:
+    """Frozen-ensemble AUC on a fixed validation split — the E006 paired baseline.
+
+    Fits fresh per-plane heads on the training side only, predicts the validation
+    side through the production combiner, and scores per-label AUC vs thresholded
+    labels. Run on the same `stratified_holdout` mask as a fine-tune to get a
+    frozen-vs-finetuned comparison where the only difference is the training, not
+    the split.
+
+    Args:
+        bank: Cached features from `collect_features` (or `load_feature_bank`).
+        val_mask: (n_studies,) bool, True = validation (`stratified_holdout`).
+        head_type: Pooling/head family for the frozen baseline.
+        cell_weights: Optional (n_studies, 12) confidence weights; training side
+            only, as in `cross_validate`.
+        seed: Head-init seed.
+
+    Returns:
+        Label name -> validation AUC (NaN where the split has a single class),
+        computed by `fitting.per_label_auc`.
+    """
+    targets = torch.from_numpy(bank.labels)  # pyright: ignore[reportUnknownMemberType]
+    train_indices = np.flatnonzero(~val_mask)
+    heads: dict[SeriesType, nn.Module] = {}
+    for plane_index, series_type in enumerate(bank.series_types):
+        plane_features = bank.features[series_type]
+        rows = [int(i) for i in train_indices if plane_features[int(i)] is not None]
+        if not rows:
+            continue  # plane absent from the training side; it sits out
+        matrices = [f for i in rows if (f := plane_features[i]) is not None]
+        row_weights = (
+            torch.from_numpy(cell_weights[rows])  # pyright: ignore[reportUnknownMemberType]
+            if cell_weights is not None
+            else None
+        )
+        heads[series_type] = fit_plane_head(
+            matrices, targets[rows], head_type, seed=seed * 10 + plane_index, cell_weights=row_weights
+        )
+
+    predictions: list[np.ndarray] = []
+    for study in np.flatnonzero(val_mask):
+        per_model_rows: list[np.ndarray] = []
+        for series_type in bank.series_types:
+            feature = bank.features[series_type][int(study)]
+            head = heads.get(series_type)
+            if feature is None or head is None:
+                per_model_rows.append(np.full(len(LABEL_COLUMNS), np.nan))
+                continue
+            per_model_rows.append(predict_with_head(head, feature))
+        predictions.append(merge_predictions(np.stack(per_model_rows), bank.series_types))
+    binary = (bank.labels[val_mask] >= EVAL_THRESHOLD).astype(np.float32)
+    return per_label_auc(binary, np.stack(predictions))
 
 
 def cross_validate(

@@ -11,6 +11,7 @@ from knee.cv import (
     _stratified_fold_assignments,  # pyright: ignore[reportPrivateUsage]
     collect_features,
     cross_validate,
+    evaluate_holdout,
     load_feature_bank,
     save_feature_bank,
 )
@@ -177,6 +178,24 @@ def test_cross_validate_attention_head_is_complete_and_reproducible() -> None:
     assert not np.isnan(first.oof_probabilities).any()
     assert 0.0 <= first.macro_auc <= 1.0
     assert first.macro_auc == second.macro_auc
+
+
+def test_evaluate_holdout_scores_only_the_validation_side() -> None:
+    """Catches the E006 paired baseline leaking training studies into its score —
+    the frozen-vs-finetuned comparison is only meaningful if both numbers come from
+    models that never saw the validation split."""
+    bank = _synthetic_bank(missing={SeriesType.AXIAL_FLUID: {3}})
+    val_mask = np.zeros(9, dtype=bool)
+    val_mask[[0, 1, 2]] = True
+
+    first = evaluate_holdout(bank, val_mask, seed=0)
+    second = evaluate_holdout(bank, val_mask, seed=0)
+    weighted = evaluate_holdout(bank, val_mask, cell_weights=np.ones((9, 12), dtype=np.float32), seed=0)
+
+    assert set(first) == set(LABEL_COLUMNS)
+    assert first == second  # seeded: reproducible for the paired comparison
+    # All-ones weights are a no-op, so the weighted path must agree exactly.
+    assert first == weighted
 
 
 def test_cross_validate_accepts_soft_labels() -> None:

@@ -7,6 +7,7 @@ from knee.fitting import fit_attention_head, pad_slice_features
 from knee.labels import LABEL_COLUMNS
 from knee.model import (
     HeadType,
+    InputMode,
     KneeModel,
     PerLabelAttentionHead,
     load_model,
@@ -134,6 +135,30 @@ def test_checkpoint_without_head_type_loads_as_mean_max(tmp_path: Path) -> None:
 
     loaded = load_model(tmp_path / "legacy.pt")
     assert loaded.model.head_type is HeadType.MEAN_MAX
+    torch.testing.assert_close(loaded.model.predict_study(volume), before)
+
+
+def test_fixed_size_vit_runs_at_overridden_resolution(tmp_path: Path) -> None:
+    """Catches the E007 enabler breaking — DINOv2's ViT is fixed at 518px, and
+    fine-tuning at that size is infeasible (a ~100GB pixel cache). The image_size
+    override must build a working ViT at the chosen resolution AND survive the
+    checkpoint round trip, or the offline submission notebook would rebuild the
+    model at the wrong size and crash (or interpolate wrongly) at scoring time."""
+    from knee.model import DINOV2_BACKBONE
+    from knee.series import SeriesType
+
+    model = KneeModel(
+        DINOV2_BACKBONE, pretrained=False, head_type=HeadType.ATTENTION,
+        input_mode=InputMode.TRIPLETS, image_size=126,  # small multiple of patch 14
+    )
+    model.eval()
+    volume = torch.rand(5, 126, 126, generator=torch.Generator().manual_seed(6))
+    before = model.predict_study(volume)
+    assert before.shape == (len(LABEL_COLUMNS),)
+
+    save_model(model, tmp_path / "ck.pt", input_size=126, series_type=SeriesType.CORONAL_FLUID)
+    loaded = load_model(tmp_path / "ck.pt")
+    assert loaded.model.image_size == 126
     torch.testing.assert_close(loaded.model.predict_study(volume), before)
 
 
