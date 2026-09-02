@@ -1,10 +1,11 @@
 from collections.abc import Sequence
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from knee.data import gold_studies, load_blended_labels
+from knee.data import gold_studies, load_blended_labels, weight_matrix
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 
 
@@ -97,3 +98,32 @@ def test_blended_labels_duplicate_uid_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="duplicate"):
         load_blended_labels(csv_path)
+
+
+def test_blended_weights_are_exposed_on_request(tmp_path: Path) -> None:
+    """Catches the E006a plumbing breaking — tier-weighted training only works if
+    the __weight companions survive loading and extract aligned with LABEL_COLUMNS;
+    silently dropped or reordered weights would weight the wrong findings."""
+    csv_path = tmp_path / "blended.csv"
+    _write_blended_csv(csv_path, [[0.9] * 12, [0.1] * 12])
+
+    blended = load_blended_labels(csv_path, include_weights=True)
+    weights = weight_matrix(blended)
+
+    assert weights.shape == (2, len(LABEL_COLUMNS))
+    assert weights.dtype == np.float32
+    assert (weights == 1.0).all()
+    # The default path stays weight-free, so existing callers are untouched.
+    assert f"{LABEL_COLUMNS[0]}__weight" not in load_blended_labels(csv_path).columns
+
+
+def test_negative_blended_weights_are_rejected(tmp_path: Path) -> None:
+    """Catches a corrupted weights export — a negative weight would *reward* the
+    model for being wrong on that cell, a silent training inversion."""
+    csv_path = tmp_path / "blended.csv"
+    frame = _write_blended_csv(csv_path, [[0.5] * 12])
+    frame[f"{LABEL_COLUMNS[0]}__weight"] = -0.5
+    frame.to_csv(csv_path, index=False)
+
+    with pytest.raises(ValueError, match="negative weights"):
+        load_blended_labels(csv_path, include_weights=True)

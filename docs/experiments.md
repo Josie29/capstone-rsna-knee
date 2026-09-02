@@ -18,6 +18,8 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
+| E006a-tier-weighted-loss | 2026-09-02 | blended_v1 soft labels + per-cell `__weight` companions / 4,407 | best frozen E005 config, per-cell weighted BCE | blended-cv A/B vs unweighted, same bank/folds (zero decode — bank refit) | pending | pending | — | this file (log below), PR #20 |
+| E006-finetune | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 fine-tuned end-to-end on 2.5D adjacent-slice triplets, staged unfreeze, warm-started from best E005 heads | **new regime**: fixed stratified 90/10 holdout (full CV infeasible at one fine-tune per fold); frozen E005 winner re-scored on the same split as paired baseline | pending (awaits E005 config) | pending | — | this file (log below), PR #20 |
 | E005a-mm-crop | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 with fixed 140mm center crop (PixelSpacing-derived) | blended-cv, crop margin of the 2x2 run shared with E005b | pending | pending | — | this file (log below), PR #18 |
 | E005b-perlabel-attention | 2026-09-02 | blended_v1 soft labels / 4,407 / 3 fluid planes | resnet34 @224 + per-label gated attention MIL heads, plane-prior combiner | blended-cv, pooling margin of the 2x2 run shared with E005a | pending | pending | — | this file (log below), PR #17/#18 |
 | E004-dinov2-frozen | 2026-09-01 | blended_v1 soft labels / 4,407 / 3 fluid planes | 3x frozen DINOv2 ViT-S/14 @518 + linear head, plane-prior combiner | blended-cv A/B vs resnet34 @224 (baseline = E003's recorded run) | **0.783** | 0.773 (tie w/ E003) | train ~4h11m T4; scoring rerun ~2h (vs E003's ~25 min) | this file (log below), PR #14, kernels train v8 / inference v5 |
@@ -92,4 +94,44 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
   null isn't worth a submission. Combiner untouched; learning it from OOF
   predictions is the follow-up (E005c). Runs as the pooling margin of the 2x2
   kernel run shared with E005a (see its design notes).
+- **Outcome:** _pending_
+
+### E006-finetune
+- **Hypothesis:** training the backbone end-to-end beats every frozen probe. The
+  student-teacher gap says so: our best model scores 0.773 (LB) while the labels
+  that taught it agree with gold at 0.887 — the model has not extracted what the
+  labels already contain, so training capacity, not label quality, is the current
+  binding constraint. The entire public-notebook plateau (~0.87) is fine-tuned
+  CNNs, and practitioner guidance says score tracks how much of the backbone is
+  unfrozen (docs/rsna_brain.md §2.31). E004's null was about frozen-feature
+  *choice*, not feature *training* — different levers.
+- **Design notes:** 2.5D inputs — K=3 anchor images per series, channels = physically
+  adjacent slices (needs PR #16's sort), from a uint8 pixel cache built once with
+  the E005a crop machinery (`build_pixel_cache`); staged unfreeze (2 frozen epochs,
+  then backbone at 1/10 the head LR, cosine schedule); augmentation without
+  horizontal flips (mirroring swaps medial/lateral anatomy under fixed labels);
+  best-epoch selection on a fixed stratified 90/10 holdout (`stratified_holdout`),
+  which is the regime marker — full CV would cost one fine-tune per fold. Heads
+  warm-start from the winning E005 cell; `input_mode`/`n_anchors` ride in the
+  checkpoint so inference reproduces the triplet sampling automatically. Final
+  config (crop_mm, head type) set by the E005 2x2 result before the kernel run.
+- **Outcome:** _pending_
+
+### E006a-tier-weighted-loss
+- **Hypothesis:** weighting each label cell by Ryan's per-cell confidence weight
+  (docs/modeling understanding/blended-labels-methodology.md: tier 1 explicit
+  statement = full weight, tier 2 proxy-filled = partial, tier 3 ungrounded guess =
+  reduced) beats treating every cell equally — the model learns hardest from cells
+  grounded in explicit report language and is punished less for disagreeing with
+  guesses. This is the "validated but deliberately unused" lever E003 staged;
+  down-weighting, not downsampling — no rows are dropped (weight 0 is the limiting
+  case). Controlled A/B: identical bank, folds, and head; only the loss weighting
+  changes. Costs minutes, not hours — labels/loss changes refit from cached banks
+  with zero decode.
+- **Design notes:** `weighted_bce` multiplies per-cell BCE by the `__weight`
+  companion and normalizes by total weight; `pos_weight` stays computed from
+  unweighted targets (class imbalance and evidence confidence are separate
+  concerns). Stratification and AUC stay unweighted — only training listens to
+  confidence. Plumbed through all three trainers (frozen linear, attention MIL,
+  fine-tune), so if it wins here E006 adopts it as its training loss.
 - **Outcome:** _pending_

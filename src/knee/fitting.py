@@ -22,7 +22,7 @@ _ATTENTION_BATCH = 128
 _ATTENTION_WEIGHT_DECAY = 1e-4
 
 
-def _positive_weight(targets: torch.Tensor) -> torch.Tensor:
+def positive_weight(targets: torch.Tensor) -> torch.Tensor:
     """Per-label BCE pos_weight so rare findings aren't drowned out.
 
     On soft labels the counts become expected counts, which weights the same way.
@@ -31,6 +31,38 @@ def _positive_weight(targets: torch.Tensor) -> torch.Tensor:
     positives = targets.sum(dim=0)
     negatives = targets.shape[0] - positives
     return torch.where(positives > 0, negatives / positives.clamp(min=1), torch.ones_like(positives))
+
+
+def weighted_bce(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    *,
+    pos_weight: torch.Tensor,
+    cell_weights: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """BCE-with-logits, optionally weighted per cell by label-confidence weights.
+
+    The per-cell weights are the blended labels' `__weight` companions (see
+    docs/modeling understanding/blended-labels-methodology.md): tier-3 ungrounded
+    guesses influence the loss less than explicit-statement cells, without being
+    dropped. `pos_weight` stays computed from unweighted targets — it corrects
+    class imbalance, a separate concern from evidence confidence.
+
+    Args:
+        logits: (batch, 12) model outputs.
+        targets: (batch, 12) float labels.
+        pos_weight: (12,) per-label positive weight, from `positive_weight`.
+        cell_weights: Optional (batch, 12) non-negative weights; None = unweighted.
+
+    Returns:
+        Scalar loss (weighted mean when `cell_weights` is given).
+    """
+    loss = torch.nn.functional.binary_cross_entropy_with_logits(
+        logits, targets, pos_weight=pos_weight, reduction="none"
+    )
+    if cell_weights is None:
+        return loss.mean()
+    return (loss * cell_weights).sum() / cell_weights.sum().clamp(min=1e-8)
 
 
 def pad_slice_features(features: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
@@ -57,7 +89,13 @@ def pad_slice_features(features: list[torch.Tensor]) -> tuple[torch.Tensor, torc
     return padded, mask
 
 
-def fit_head(head: nn.Linear, features: torch.Tensor, targets: torch.Tensor) -> None:
+def fit_head(
+    head: nn.Linear,
+    features: torch.Tensor,
+    targets: torch.Tensor,
+    *,
+    cell_weights: torch.Tensor | None = None,
+) -> None:
     """Train the linear head on cached study features.
 
     Valid only because the backbone is frozen: `model(volume)` equals
@@ -69,14 +107,15 @@ def fit_head(head: nn.Linear, features: torch.Tensor, targets: torch.Tensor) -> 
         features: (n_studies, feature_dim) pooled study features.
         targets: (n_studies, 12) float labels — hard 0/1 or soft probabilities;
             BCE accepts both.
+        cell_weights: Optional (n_studies, 12) per-cell confidence weights
+            (see `weighted_bce`); None = unweighted.
     """
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=_positive_weight(targets))
-
+    pos_weight = positive_weight(targets)
     optimizer = torch.optim.Adam(head.parameters(), lr=_HEAD_LR)
     head.train()
     for _ in range(_HEAD_EPOCHS):  # full-batch: even 4.4k rows x 1024 features is ~18 MB
         optimizer.zero_grad()
-        loss = loss_fn(head(features), targets)
+        loss = weighted_bce(head(features), targets, pos_weight=pos_weight, cell_weights=cell_weights)
         loss.backward()  # pyright: ignore[reportUnknownMemberType]
         optimizer.step()  # pyright: ignore[reportUnknownMemberType]
     head.eval()
@@ -87,6 +126,7 @@ def fit_attention_head(
     slice_features: list[torch.Tensor],
     targets: torch.Tensor,
     *,
+    cell_weights: torch.Tensor | None = None,
     seed: int = 0,
 ) -> None:
     """Train the per-label attention head on cached per-slice study features.
@@ -104,6 +144,8 @@ def fit_attention_head(
         slice_features: Per-study (n_slices_i, feature_dim) matrices, aligned with
             `targets` rows.
         targets: (n_studies, 12) float labels — hard 0/1 or soft probabilities.
+        cell_weights: Optional (n_studies, 12) per-cell confidence weights
+            (see `weighted_bce`); None = unweighted.
         seed: Shuffling seed, so refits from the same bank are reproducible.
 
     Raises:
@@ -113,7 +155,7 @@ def fit_attention_head(
         raise ValueError(f"{len(slice_features)} feature matrices vs {targets.shape[0]} target rows")
     device = resolve_device()
     head.to(device)
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=_positive_weight(targets).to(device))
+    pos_weight = positive_weight(targets).to(device)
     optimizer = torch.optim.Adam(head.parameters(), lr=_ATTENTION_LR, weight_decay=_ATTENTION_WEIGHT_DECAY)
     generator = torch.Generator().manual_seed(seed)
     head.train()
@@ -123,7 +165,12 @@ def fit_attention_head(
             batch = order[start : start + _ATTENTION_BATCH]
             padded, mask = pad_slice_features([slice_features[int(i)] for i in batch])
             optimizer.zero_grad()
-            loss = loss_fn(head(padded.to(device), mask.to(device)), targets[batch].to(device))
+            loss = weighted_bce(
+                head(padded.to(device), mask.to(device)),
+                targets[batch].to(device),
+                pos_weight=pos_weight,
+                cell_weights=cell_weights[batch].to(device) if cell_weights is not None else None,
+            )
             loss.backward()  # pyright: ignore[reportUnknownMemberType]
             optimizer.step()  # pyright: ignore[reportUnknownMemberType]
     head.to("cpu")

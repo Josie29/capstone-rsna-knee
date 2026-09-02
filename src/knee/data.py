@@ -1,13 +1,32 @@
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 
 # Per-label companion columns in the blended-labels CSV (see
-# docs/modeling understanding/blended-labels-methodology.md). Validated present but
-# not yet consumed: tier-weighted training is a separate experiment.
+# docs/modeling understanding/blended-labels-methodology.md): __weight is the
+# per-cell training weight (how much the estimate should influence the model),
+# __tier records which kind of evidence produced it (explicit / proxy / guess).
 _BLENDED_COMPANION_SUFFIXES = ("__weight", "__tier")
+
+WEIGHT_SUFFIX = "__weight"
+
+
+def weight_matrix(blended: pd.DataFrame) -> np.ndarray:
+    """Per-cell training weights aligned with `LABEL_COLUMNS`.
+
+    Args:
+        blended: Frame from `load_blended_labels(..., include_weights=True)`.
+
+    Returns:
+        (n_studies, 12) float32 array of the `__weight` companions.
+
+    Raises:
+        KeyError: If the frame was loaded without weights.
+    """
+    return blended[[f"{label}{WEIGHT_SUFFIX}" for label in LABEL_COLUMNS]].to_numpy(dtype=np.float32)
 
 
 def gold_studies(train_df: pd.DataFrame) -> pd.DataFrame:
@@ -49,27 +68,30 @@ def gold_studies(train_df: pd.DataFrame) -> pd.DataFrame:
     return gold
 
 
-def load_blended_labels(csv_path: Path) -> pd.DataFrame:
+def load_blended_labels(csv_path: Path, *, include_weights: bool = False) -> pd.DataFrame:
     """Load the blended (report-mined) soft labels for every train study.
 
     The CSV carries, per label, a probability estimate plus `__weight`/`__tier`
     companion columns describing how the estimate was produced. The companions are
-    validated present (so a truncated export fails loudly) but dropped: the current
-    experiment trains on the probabilities alone, and tier-weighted loss is a later,
-    separate lever.
+    always validated present (so a truncated export fails loudly); with
+    `include_weights` the `__weight` columns are kept for tier-weighted training
+    (E006a) — extract them with `weight_matrix`.
 
     Args:
         csv_path: Path to `blended_labels_v1.csv` (locally under `data/processed/`,
             on Kaggle under the mounted `knee-labels` dataset).
+        include_weights: Keep the per-cell `__weight` companions (validated finite
+            and non-negative) alongside the probabilities.
 
     Returns:
         One row per study: `StudyInstanceUID` plus the 12 label columns as float32
-        probabilities in [0, 1].
+        probabilities in [0, 1] (plus the 12 `__weight` columns when requested).
 
     Raises:
         ValueError: If a label or companion column is missing, a study UID repeats,
-            or a probability is NaN or outside [0, 1] — any of which means the
-            blended-labels contract changed and training on the file is unsafe.
+            a probability is NaN or outside [0, 1], or (with `include_weights`) a
+            weight is NaN or negative — any of which means the blended-labels
+            contract changed and training on the file is unsafe.
     """
     frame = pd.read_csv(csv_path)
     label_columns = list(LABEL_COLUMNS)
@@ -91,6 +113,17 @@ def load_blended_labels(csv_path: Path) -> pd.DataFrame:
     if ((probabilities < 0) | (probabilities > 1)).any().any():
         raise ValueError(f"{csv_path.name} has probabilities outside [0, 1]")
 
-    blended = frame[[STUDY_ID_COLUMN, *label_columns]].copy()
+    kept_columns = [STUDY_ID_COLUMN, *label_columns]
+    if include_weights:
+        weight_columns = [f"{label}{WEIGHT_SUFFIX}" for label in label_columns]
+        weights = frame[weight_columns]
+        if weights.isna().any().any():
+            raise ValueError(f"{csv_path.name} has NaN weights")
+        if (weights < 0).any().any():
+            raise ValueError(f"{csv_path.name} has negative weights")
+        kept_columns += weight_columns
+        frame[weight_columns] = weights.astype("float32")
+
+    blended = frame[kept_columns].copy()
     blended[label_columns] = probabilities.astype("float32")
     return blended
