@@ -18,6 +18,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
+| E009-laterality-sagt1 | 2026-09-03 | blended_v1 soft labels + tier weights / 4,407 / 4 sequence slots in one bag | E008 recipe + laterality normalization (canonical right-knee frame from patient-space geometry) + Sagittal T1 fourth slot | fixed 90/10 holdout (seed 0, paired with E008) | pending | pending | train ~3-3.5h T4, single arm | this file (log below) |
 | E008-resnet-unified-finetune | 2026-09-03 | blended_v1 soft labels + tier weights / 4,407 / all planes in one bag | unified resnet34 fine-tuned on 8-anchor 2.5D bags, per-label attention, AMP + no-decay-norms trainer fixes | fixed 90/10 holdout (seed 0); frozen warm-up epochs = internal baseline | **0.785** (fine-tune WORKED: +0.081 over its frozen stage) | — (below the 0.80 bar, not submitted) | train ~2h20m T4 | this file (log below), PR #23, kernels train v12 |
 | E007-unified-multiplane | 2026-09-02 | blended_v1 soft labels + tier weights / 4,407 / all planes in one bag | ONE MultiPlaneModel: DINOv2 @224 fine-tuned, per-plane embeddings, per-label attention over the cross-plane bag — no combiner | fixed 90/10 holdout (seed 0, paired with E006) | 0.720 (best epoch = frozen warm-up; unfreeze regressed) | — (gate failed, not submitted) | train ~2h T4 | this file (log below), PR #22, kernels train v11 |
 | E006a-tier-weighted-loss | 2026-09-02 | blended_v1 soft labels + per-cell `__weight` companions / 4,407 | best frozen E005 config, per-cell weighted BCE | blended-cv A/B vs unweighted, same bank/folds (zero decode — bank refit) | pending | pending | — | this file (log below), PR #20 |
@@ -162,6 +163,20 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
   checkpoints (log the per-label plane-attention weights vs the clinical prior
   table — rediscovered or refuted, either is a finding and a deck beat).
   Submission gate: clear 0.783 decisively AND beat E006's paired number.
+- **Outcome:** _pending_
+
+### E009-laterality-sagt1
+- **Hypothesis:** the two input-level deltas vs the documented 0.92-tier pipelines
+  are worth real AUC on top of the working E008 recipe. (a) Laterality: left/right
+  knees are mirror images and we feed both raw, so medial/lateral anatomy swaps
+  sides per knee — canonicalizing (side from image-center patient-x, 97% resolvable
+  per forum-validated method; coronal/axial flip horizontally, sagittal reverses
+  slice order; bilateral/ambiguous volumes left unmirrored) should move the four
+  side-specific thin-structure labels most (E008: MCL 0.722, MedMen 0.746, ACL
+  0.750, LatMen 0.766). (b) Sagittal T1 fourth slot: marrow/bone contrast — read =
+  OA/Fracture/Contusion move. Provenance: checkpoint stamps laterality_normalized
+  so inference reproduces the frame. Single arm, paired vs E008's 0.785; >=0.80
+  clears the submission bar.
 - **Outcome:** _pending_
 
 ### E008-resnet-unified-finetune

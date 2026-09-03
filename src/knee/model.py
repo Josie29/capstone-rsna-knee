@@ -570,6 +570,7 @@ def save_multiplane_model(
     label_source: str = "unspecified",
     n_studies: int = 0,
     crop_mm: float | None = None,
+    laterality_normalized: bool = False,
 ) -> None:
     """Write a unified multi-plane checkpoint plus reproduction metadata.
 
@@ -580,6 +581,9 @@ def save_multiplane_model(
         label_source: Which label set trained this checkpoint.
         n_studies: Number of studies trained on.
         crop_mm: Fixed-mm crop the training volumes used (None = full frame).
+        laterality_normalized: Whether training volumes were mirrored onto the
+            canonical right-knee frame — inference must match or medial/lateral
+            anatomy silently swaps sides.
     """
     torch.save(
         {
@@ -594,6 +598,7 @@ def save_multiplane_model(
             "crop_mm": crop_mm,
             "n_anchors": model.n_anchors,
             "image_size": model.image_size,
+            "laterality_normalized": laterality_normalized,
         },
         path,
     )
@@ -608,6 +613,7 @@ class LoadedMultiPlaneModel(BaseModel):
     input_size: int
     series_types: list[SeriesType]
     crop_mm: float | None
+    laterality_normalized: bool
 
 
 def load_multiplane_model(path: Path) -> LoadedMultiPlaneModel:
@@ -646,4 +652,6 @@ def load_multiplane_model(path: Path) -> LoadedMultiPlaneModel:
         input_size=int(payload["input_size"]),
         series_types=series_types,
         crop_mm=float(crop_mm) if crop_mm is not None else None,
+        # Pre-E009 checkpoints trained on un-mirrored volumes; default accordingly.
+        laterality_normalized=bool(payload.get("laterality_normalized", False)),
     )

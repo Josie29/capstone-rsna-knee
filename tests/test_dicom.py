@@ -1,3 +1,4 @@
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -5,7 +6,10 @@ import pytest
 import torch
 from conftest import write_dicom_slice
 
-from knee.dicom import load_volume
+from knee.dicom import LateralityOutcome, load_volume
+
+# Coronal frame: columns advance toward patient-left (+x), rows advance downward (-z).
+_CORONAL = (1.0, 0.0, 0.0, 0.0, 0.0, -1.0)
 
 
 def test_slices_are_sorted_by_physical_position_over_instance_number(tmp_path: Path) -> None:
@@ -111,6 +115,115 @@ def test_crop_larger_than_frame_uses_whole_frame(tmp_path: Path) -> None:
     volume = load_volume(tmp_path, size=32, crop_mm=100.0)
     assert volume.shape == (1, 32, 32)
     assert volume.max() == 1.0  # corner survives: whole frame used
+
+
+def _asymmetric_pixels() -> np.ndarray:
+    """8x8 frame with a bright band on the patient-right (low-column) side."""
+    pixels = np.zeros((8, 8))
+    pixels[:, 0:3] = 900
+    return pixels
+
+
+def test_mirrored_knees_canonicalize_identically(tmp_path: Path) -> None:
+    """The invariance the feature exists for: a left knee and its mirror-twin right
+    knee must produce the same canonical volume. Without it, medial/lateral anatomy
+    lands on opposite sides of the frame per knee side, corrupting the five
+    side-specific findings (MCL, both menisci, both OA compartments)."""
+    pixels = _asymmetric_pixels()
+    right = tmp_path / "right"
+    write_dicom_slice(
+        right / "a.dcm", pixels, instance_number=1,
+        image_position=(-53.5, 0.0, 3.5), image_orientation=_CORONAL, pixel_spacing=(1.0, 1.0),
+    )
+    left = tmp_path / "left"  # mirrored across the sagittal plane: flipped pixels at +x
+    write_dicom_slice(
+        left / "a.dcm", np.fliplr(pixels), instance_number=1,
+        image_position=(46.5, 0.0, 3.5), image_orientation=_CORONAL, pixel_spacing=(1.0, 1.0),
+    )
+
+    counts: Counter[LateralityOutcome] = Counter()
+    volume_right = load_volume(right, size=8, canonicalize_laterality=True, laterality_counts=counts)
+    volume_left = load_volume(left, size=8, canonicalize_laterality=True, laterality_counts=counts)
+    assert torch.allclose(volume_right, volume_left)
+    assert counts == {LateralityOutcome.RIGHT: 1, LateralityOutcome.LEFT_MIRRORED: 1}
+
+
+def test_left_knee_is_mirrored_and_right_knee_is_not(tmp_path: Path) -> None:
+    """Catches the flip firing on the wrong side (or both sides): the canonical
+    frame is the right knee's, so a right knee must pass through untouched while a
+    left knee gets the horizontal flip."""
+    pixels = _asymmetric_pixels()
+    for side, origin_x in (("right", -53.5), ("left", 46.5)):
+        write_dicom_slice(
+            tmp_path / side / "a.dcm", pixels, instance_number=1,
+            image_position=(origin_x, 0.0, 3.5), image_orientation=_CORONAL, pixel_spacing=(1.0, 1.0),
+        )
+    volume_right = load_volume(tmp_path / "right", size=8, canonicalize_laterality=True)
+    volume_left = load_volume(tmp_path / "left", size=8, canonicalize_laterality=True)
+    assert volume_right[0, 0, 0] == 1.0 and volume_right[0, 0, 7] == 0.0  # untouched
+    assert volume_left[0, 0, 0] == 0.0 and volume_left[0, 0, 7] == 1.0  # mirrored
+
+
+def test_sagittal_acquisition_direction_is_normalized(tmp_path: Path) -> None:
+    """Catches stack-direction variance surviving canonicalization: the same knee
+    scanned left-to-right vs right-to-left must yield the same slice order, or
+    sagittal medial/lateral position stays scanner-dependent (the depth-axis
+    equivalent of the horizontal flip)."""
+    # Same right knee; orientation A's stack normal points to patient-right (-x),
+    # orientation B's to patient-left (+x) — opposite acquisition directions.
+    orientations = {
+        "a": (0.0, 1.0, 0.0, 0.0, 0.0, -1.0),  # normal (-1, 0, 0)
+        "b": (0.0, 1.0, 0.0, 0.0, 0.0, 1.0),  # normal (+1, 0, 0)
+    }
+    for name, orientation in orientations.items():
+        for i, x in enumerate((-52.0, -50.0, -48.0)):
+            write_dicom_slice(
+                tmp_path / name / f"{i}.dcm", np.full((4, 4), 100.0 * (i + 1)), instance_number=i,
+                image_position=(x, 0.0, 1.5), image_orientation=orientation, pixel_spacing=(1.0, 1.0),
+            )
+    volume_a = load_volume(tmp_path / "a", size=4, canonicalize_laterality=True)
+    volume_b = load_volume(tmp_path / "b", size=4, canonicalize_laterality=True)
+    assert torch.allclose(volume_a, volume_b)
+
+
+def test_midline_center_skips_the_mirror(tmp_path: Path) -> None:
+    """Catches over-eager mirroring of side-ambiguous volumes — notably the handful
+    of bilateral series, where flipping would swap one real knee into the other."""
+    pixels = _asymmetric_pixels()
+    write_dicom_slice(
+        tmp_path / "a.dcm", pixels, instance_number=1,
+        image_position=(-3.5, 0.0, 3.5), image_orientation=_CORONAL, pixel_spacing=(1.0, 1.0),
+    )
+    counts: Counter[LateralityOutcome] = Counter()
+    volume = load_volume(tmp_path, size=8, canonicalize_laterality=True, laterality_counts=counts)
+    assert volume[0, 0, 0] == 1.0  # not mirrored
+    assert counts == {LateralityOutcome.AMBIGUOUS: 1}
+
+
+def test_missing_geometry_passes_through_unflipped(tmp_path: Path) -> None:
+    """Catches the flag crashing or guessing on the SliceLocation-fallback path:
+    without orientation tags there is no trustworthy frame, so the volume must load
+    exactly as it does with canonicalization off."""
+    pixels = _asymmetric_pixels()
+    write_dicom_slice(tmp_path / "a.dcm", pixels, instance_number=1, slice_location=10.0)
+    counts: Counter[LateralityOutcome] = Counter()
+    canonical = load_volume(tmp_path, size=8, canonicalize_laterality=True, laterality_counts=counts)
+    plain = load_volume(tmp_path, size=8)
+    assert torch.equal(canonical, plain)
+    assert counts == {LateralityOutcome.NO_GEOMETRY: 1}
+
+
+def test_canonicalization_off_never_flips(tmp_path: Path) -> None:
+    """Catches the default regressing: every pre-E009 caller (legacy ensemble
+    checkpoints, feature banks) trained on un-mirrored volumes and must keep
+    loading byte-identical inputs."""
+    pixels = _asymmetric_pixels()
+    write_dicom_slice(
+        tmp_path / "a.dcm", pixels, instance_number=1,
+        image_position=(46.5, 0.0, 3.5), image_orientation=_CORONAL, pixel_spacing=(1.0, 1.0),
+    )  # a left knee, which WOULD mirror if the flag were on
+    volume = load_volume(tmp_path, size=8)
+    assert volume[0, 0, 0] == 1.0
 
 
 def test_empty_series_dir_is_rejected(tmp_path: Path) -> None:
