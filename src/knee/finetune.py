@@ -152,6 +152,31 @@ def build_pixel_cache(
     return CacheBuildResult(n_studies=len(study_uids), coverage=coverage)
 
 
+def optimizer_param_groups(module: torch.nn.Module, lr: float, weight_decay: float) -> list[dict[str, object]]:
+    """Two AdamW groups: weights get decay; norms and biases don't.
+
+    Decaying normalization scales and biases is a known fine-tuning destabilizer
+    (ViTs especially — every block is LayerNorm-coupled); excluding them is the
+    standard recipe. Params are split by shape (ndim <= 1 catches norm scales and
+    biases), not by requires_grad — the staged unfreeze toggles that after the
+    optimizer is built, and frozen params receive no grads anyway.
+
+    Args:
+        module: The module whose parameters to group.
+        lr: Learning rate for both groups.
+        weight_decay: Decay for the weight group; the norm/bias group gets 0.
+
+    Returns:
+        Param-group dicts ready for the optimizer.
+    """
+    decay = [p for p in module.parameters() if p.ndim > 1]
+    no_decay = [p for p in module.parameters() if p.ndim <= 1]
+    return [
+        {"params": decay, "lr": lr, "weight_decay": weight_decay},
+        {"params": no_decay, "lr": lr, "weight_decay": 0.0},
+    ]
+
+
 def _load_stack(path: Path) -> torch.Tensor:
     """One cached uint8 stack back to (n_slices, H, W) float in [0, 1]."""
     return torch.from_numpy(np.load(path).astype(np.float32) / 255.0)  # pyright: ignore[reportUnknownMemberType]
@@ -320,13 +345,13 @@ def finetune_plane(
         else None
     )
     optimizer = torch.optim.AdamW(
-        [
-            {"params": model.backbone.parameters(), "lr": config.backbone_lr},
-            {"params": model.head.parameters(), "lr": config.head_lr},
-        ],
-        weight_decay=config.weight_decay,
+        optimizer_param_groups(model.backbone, config.backbone_lr, config.weight_decay)
+        + optimizer_param_groups(model.head, config.head_lr, config.weight_decay)
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs)
+    # fp16 autocast without a scaler silently underflows small gradients — the
+    # scaler is what makes mixed precision safe on a T4 (no bf16 there).
+    scaler = torch.amp.GradScaler("cuda", enabled=device == "cuda")
     rng = np.random.default_rng(config.seed)
 
     best_macro, best_epoch, best_state, best_per_label = -1.0, -1, None, {}
@@ -370,8 +395,9 @@ def finetune_plane(
                     if train_weights is not None
                     else None,
                 )
-            loss.backward()  # pyright: ignore[reportUnknownMemberType]
-            optimizer.step()  # pyright: ignore[reportUnknownMemberType]
+            scaler.scale(loss).backward()  # pyright: ignore[reportUnknownMemberType]
+            scaler.step(optimizer)  # pyright: ignore[reportUnknownMemberType]
+            scaler.update()
         scheduler.step()
 
         val_auc = _evaluate(model, cache_dir, series_type, val_rows, binary_val, config, device)
@@ -536,14 +562,14 @@ def finetune_unified(
         else None
     )
     optimizer = torch.optim.AdamW(
-        [
-            {"params": model.backbone.parameters(), "lr": config.backbone_lr},
-            {"params": model.plane_embeddings.parameters(), "lr": config.head_lr},
-            {"params": model.head.parameters(), "lr": config.head_lr},
-        ],
-        weight_decay=config.weight_decay,
+        optimizer_param_groups(model.backbone, config.backbone_lr, config.weight_decay)
+        + optimizer_param_groups(model.plane_embeddings, config.head_lr, config.weight_decay)
+        + optimizer_param_groups(model.head, config.head_lr, config.weight_decay)
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs)
+    # fp16 autocast without a scaler silently underflows small gradients — the
+    # scaler is what makes mixed precision safe on a T4 (no bf16 there).
+    scaler = torch.amp.GradScaler("cuda", enabled=device == "cuda")
     rng = np.random.default_rng(config.seed)
 
     best_macro, best_epoch, best_state, best_per_label = -1.0, -1, None, {}
@@ -584,8 +610,9 @@ def finetune_unified(
                     if train_weights is not None
                     else None,
                 )
-            loss.backward()  # pyright: ignore[reportUnknownMemberType]
-            optimizer.step()  # pyright: ignore[reportUnknownMemberType]
+            scaler.scale(loss).backward()  # pyright: ignore[reportUnknownMemberType]
+            scaler.step(optimizer)  # pyright: ignore[reportUnknownMemberType]
+            scaler.update()
         scheduler.step()
 
         val_auc = _evaluate_unified(model, cache_dir, val_rows, binary_val, device)
