@@ -183,3 +183,24 @@ def test_build_pixel_cache_writes_uint8_and_skips_corrupt(tmp_path: Path) -> Non
     cached = np.load(cache_path(cache_dir, SeriesType.SAGITTAL_FLUID, 0))
     assert cached.dtype == np.uint8 and cached.shape == (3, 16, 16)
     assert not cache_path(cache_dir, SeriesType.SAGITTAL_FLUID, 1).exists()
+
+
+def test_norms_and_biases_are_excluded_from_weight_decay() -> None:
+    """Catches the fine-tuning destabilizer of decaying normalization scales and
+    biases — the standard-recipe exclusion that ViT fine-tunes are especially
+    sensitive to. Every 1-D parameter must land in a zero-decay group."""
+    from typing import cast
+
+    from knee.finetune import optimizer_param_groups
+    from knee.model import KneeModel
+
+    model = KneeModel(pretrained=False)
+    groups = optimizer_param_groups(model.backbone, lr=1e-4, weight_decay=1e-4)
+
+    assert groups[0]["weight_decay"] == 1e-4 and groups[1]["weight_decay"] == 0.0
+    decay = cast(list[torch.Tensor], groups[0]["params"])
+    no_decay = cast(list[torch.Tensor], groups[1]["params"])
+    assert all(p.ndim > 1 for p in decay)
+    assert all(p.ndim <= 1 for p in no_decay)
+    assert len(decay) + len(no_decay) == len(list(model.backbone.parameters()))
+    assert len(no_decay) > 0  # resnet has plenty of BN scales/biases

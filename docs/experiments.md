@@ -18,6 +18,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
+| E008-resnet-unified-finetune | 2026-09-03 | blended_v1 soft labels + tier weights / 4,407 / all planes in one bag | unified resnet34 fine-tuned on 8-anchor 2.5D bags, per-label attention, AMP + no-decay-norms trainer fixes | fixed 90/10 holdout (seed 0); frozen warm-up epochs = internal baseline | pending | pending | — | this file (log below), PR #23 |
 | E007-unified-multiplane | 2026-09-02 | blended_v1 soft labels + tier weights / 4,407 / all planes in one bag | ONE MultiPlaneModel: DINOv2 @224 fine-tuned, per-plane embeddings, per-label attention over the cross-plane bag — no combiner | fixed 90/10 holdout (seed 0, paired with E006) | 0.720 (best epoch = frozen warm-up; unfreeze regressed) | — (gate failed, not submitted) | train ~2h T4 | this file (log below), PR #22, kernels train v11 |
 | E006a-tier-weighted-loss | 2026-09-02 | blended_v1 soft labels + per-cell `__weight` companions / 4,407 | best frozen E005 config, per-cell weighted BCE | blended-cv A/B vs unweighted, same bank/folds (zero decode — bank refit) | pending | pending | — | this file (log below), PR #20 |
 | E006-dinov2-stack | 2026-09-02 | blended_v1 soft labels + tier weights / 4,407 / 3 fluid planes | DINOv2 ViT-S/14 @224 fine-tuned end-to-end on 2.5D triplets, crop140, per-label attention, tier-weighted loss | **new regime**: fixed stratified 90/10 holdout (full CV infeasible at one fine-tune per fold); internal control = frozen warm-up epochs on the same split | 0.748 ensemble (all three planes best at frozen epoch 2; unfreeze regressed) | — (gate failed, not submitted) | train ~1h22m T4 | this file (log below), PR #20/#21, kernels train v10 |
@@ -160,4 +161,26 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
   checkpoints (log the per-label plane-attention weights vs the clinical prior
   table — rediscovered or refuted, either is a finding and a deck beat).
   Submission gate: clear 0.783 decisively AND beat E006's paired number.
+- **Outcome:** _pending_
+
+### E008-resnet-unified-finetune
+- **Hypothesis:** with the two trainer defects fixed and the input gap closed, the
+  fine-tune finally adds instead of crashing, and >=0.80 holdout macro is in
+  range. The three changes from E007, each independently motivated: (1) fp16
+  autocast ran WITHOUT a GradScaler in every fine-tune so far — small gradients
+  (exactly the backbone's) silently underflow on a T4; likely a contributor to
+  all four unfreeze crashes. Fixed, plus weight decay no longer applies to
+  norms/biases (standard recipe; ViT-relevant if we retry DINOv2). (2) Input: 8
+  anchors over a (0.1, 0.9) window (~24 slices) — the E005 2x2 showed full-slice
+  attention beats 9-slice triplets by +0.014-class margins; E006/E007 fine-tuned
+  the weaker format. (3) Backbone: resnet34 — fine-tuned CNNs are the community's
+  0.87 plateau, CNN fine-tuning is robust at these learning rates, and frozen
+  DINOv2 bought nothing at the LB (E004) while crashing twice in training.
+- **Design notes:** unified MultiPlaneModel, cold start, tier weights, crop140
+  (measured harmless), frozen_epochs=4 (E007's cold head was still climbing at
+  2), epochs=18. Success reads, in order: frozen stage approaching ~0.77-0.78
+  validates the input fix; the unfreeze ADDING validates the AMP fix; >=0.80
+  clears the submission bar (team policy 2026-09-03). A recurring crash despite
+  the fixes points at something deeper and hands the baton to the error-analysis
+  tool.
 - **Outcome:** _pending_
