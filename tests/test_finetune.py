@@ -7,6 +7,7 @@ import torch
 from conftest import write_dicom_slice
 
 from knee.cv import stratified_holdout
+from knee.dicom import LateralityOutcome
 from knee.finetune import FinetuneConfig, build_pixel_cache, cache_path, finetune_plane
 from knee.labels import LABEL_COLUMNS, STUDY_ID_COLUMN
 from knee.model import HeadType, InputMode, KneeModel, load_model, sample_triplets
@@ -183,6 +184,50 @@ def test_build_pixel_cache_writes_uint8_and_skips_corrupt(tmp_path: Path) -> Non
     cached = np.load(cache_path(cache_dir, SeriesType.SAGITTAL_FLUID, 0))
     assert cached.dtype == np.uint8 and cached.shape == (3, 16, 16)
     assert not cache_path(cache_dir, SeriesType.SAGITTAL_FLUID, 1).exists()
+
+
+def test_pixel_cache_bakes_laterality_and_reports_the_tally(tmp_path: Path) -> None:
+    """Catches the flag stopping at the cache boundary: canonicalization must land
+    in the cached pixels (epochs read only the cache — an unflipped cache trains the
+    model on the frame the fix exists to eliminate) and the tally must surface so
+    the run log can sanity-check the flip rate."""
+    labels = pd.DataFrame([[0.9] * 12], columns=list(LABEL_COLUMNS)).astype("float32")
+    labels.insert(0, STUDY_ID_COLUMN, ["study0"])
+    pd.DataFrame(
+        {
+            STUDY_ID_COLUMN: ["study0"],
+            "SeriesInstanceUID": ["series0"],
+            "Anatomical_Plane": "Coronal",
+            "Fluid_Sensitive": 1,
+            "Fat_Suppression": 1,
+        }
+    ).to_csv(tmp_path / "train_series.csv", index=False)
+    pixels = np.zeros((16, 16))
+    pixels[:, 0:5] = 900  # bright band on the low-column side
+    write_dicom_slice(
+        tmp_path / "train_series" / "study0" / "series0" / "s0.dcm",
+        pixels,
+        instance_number=1,
+        image_position=(42.5, 0.0, 7.5),  # center x = +50: a left knee
+        image_orientation=(1.0, 0.0, 0.0, 0.0, 0.0, -1.0),
+        pixel_spacing=(1.0, 1.0),
+    )
+
+    plain = build_pixel_cache(
+        tmp_path, labels, tmp_path / "cache_plain",
+        series_types=[SeriesType.CORONAL_FLUID], input_size=16, log=lambda _: None,
+    )
+    flipped = build_pixel_cache(
+        tmp_path, labels, tmp_path / "cache_flip",
+        series_types=[SeriesType.CORONAL_FLUID], input_size=16,
+        canonicalize_laterality=True, log=lambda _: None,
+    )
+
+    assert plain.laterality == {}
+    assert flipped.laterality == {LateralityOutcome.LEFT_MIRRORED: 1}
+    plain_stack = np.load(cache_path(tmp_path / "cache_plain", SeriesType.CORONAL_FLUID, 0))
+    flip_stack = np.load(cache_path(tmp_path / "cache_flip", SeriesType.CORONAL_FLUID, 0))
+    assert np.array_equal(flip_stack, plain_stack[:, :, ::-1])  # mirrored, nothing else
 
 
 def test_norms_and_biases_are_excluded_from_weight_decay() -> None:

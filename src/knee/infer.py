@@ -201,6 +201,9 @@ def _predict_studies_unified(
                 comp_root / TEST_SERIES_DIR / study_uid / series_uid,
                 size=loaded.input_size,
                 crop_mm=loaded.crop_mm,
+                # Match the training frame: a laterality-normalized checkpoint fed
+                # un-mirrored volumes would silently swap medial/lateral anatomy.
+                canonicalize_laterality=loaded.laterality_normalized,
             )
         except (ValueError, DicomDecodeError) as exc:
             log(f"{series_type}: skipping series {series_uid}: {exc}")

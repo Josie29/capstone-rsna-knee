@@ -77,6 +77,25 @@ def test_multiplane_checkpoint_round_trips(tmp_path: Path) -> None:
     torch.testing.assert_close(loaded.model.predict_study({_PLANES[1]: volume}), before)
 
 
+def test_laterality_provenance_round_trips_and_defaults_false(tmp_path: Path) -> None:
+    """Catches the frame mismatch the provenance flag exists to prevent: a
+    laterality-normalized checkpoint must announce itself so inference mirrors its
+    inputs, and pre-E009 checkpoints (no key in the payload) must load as
+    un-normalized rather than crash or guess."""
+    four_planes = _PLANES + [SeriesType.CORONAL_FLUID, SeriesType.SAGITTAL_NONFLUID]
+    model = MultiPlaneModel(series_types=four_planes, pretrained=False)
+    save_multiplane_model(model, tmp_path / "ck.pt", input_size=64, laterality_normalized=True)
+    loaded = load_multiplane_model(tmp_path / "ck.pt")
+    assert loaded.laterality_normalized is True
+    assert loaded.series_types == four_planes  # 4th slot survives the round trip
+
+    # Simulate a pre-E009 payload: same file with the key stripped.
+    payload = torch.load(tmp_path / "ck.pt", map_location="cpu", weights_only=True)
+    del payload["laterality_normalized"]
+    torch.save(payload, tmp_path / "old.pt")
+    assert load_multiplane_model(tmp_path / "old.pt").laterality_normalized is False
+
+
 def test_legacy_loader_redirects_on_multiplane_checkpoints(tmp_path: Path) -> None:
     """Catches a multiplane checkpoint silently loading through the per-plane path —
     the error must name the right loader instead of failing with a shape mismatch
@@ -129,6 +148,7 @@ def test_finetune_unified_end_to_end(tmp_path: Path) -> None:
         config=FinetuneConfig(epochs=2, frozen_epochs=1, batch_studies=8, seed=0),
         input_size=32,
         crop_mm=140.0,
+        laterality_normalized=True,
         log=lambda _: None,
     )
 
@@ -138,5 +158,6 @@ def test_finetune_unified_end_to_end(tmp_path: Path) -> None:
 
     loaded = load_multiplane_model(tmp_path / "ck.pt")
     assert loaded.crop_mm == 140.0
+    assert loaded.laterality_normalized is True  # trainer stamps the frame it fed
     probs = loaded.model.predict_study({_PLANES[0]: torch.rand(6, 32, 32)})
     assert probs.shape == (len(LABEL_COLUMNS),)

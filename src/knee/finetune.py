@@ -1,3 +1,5 @@
+import threading
+from collections import Counter
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -10,7 +12,7 @@ from pydantic import BaseModel
 from torchvision.transforms import InterpolationMode
 
 from knee.cv import EVAL_THRESHOLD
-from knee.dicom import DicomDecodeError, load_volume
+from knee.dicom import DicomDecodeError, LateralityOutcome, load_volume
 from knee.fitting import per_label_auc, positive_weight, weighted_bce
 from knee.infer import merge_predictions
 from knee.labels import STUDY_ID_COLUMN
@@ -35,6 +37,8 @@ class CacheBuildResult(BaseModel):
     n_studies: int
     # Studies with a cached stack, per plane (mirrors FeatureBank.plane_coverage).
     coverage: dict[SeriesType, int]
+    # Per-volume laterality resolution tally; empty when canonicalization is off.
+    laterality: dict[LateralityOutcome, int] = {}
 
 
 class FinetuneConfig(BaseModel):
@@ -86,6 +90,7 @@ def build_pixel_cache(
     series_types: Sequence[SeriesType],
     input_size: int = 224,
     crop_mm: float | None = None,
+    canonicalize_laterality: bool = False,
     log: Callable[[str], None] = print,
 ) -> CacheBuildResult:
     """One decode pass writing every sorted/cropped/resized stack as uint8 .npy.
@@ -104,6 +109,10 @@ def build_pixel_cache(
         input_size: Slice resize target fed to `load_volume`.
         crop_mm: Fixed-mm crop fed to `load_volume` (None = full frame). Bake the
             experiment's geometry in here — the cache IS the training input.
+        canonicalize_laterality: Mirror volumes onto the canonical right-knee frame
+            before caching (see `load_volume`). Like `crop_mm`, this bakes into the
+            cached pixels — `cache_path` carries no geometry version, so changing
+            it over an existing cache dir silently mixes frames; use a fresh dir.
         log: Progress sink (`print` in notebooks).
 
     Returns:
@@ -118,6 +127,9 @@ def build_pixel_cache(
     for series_type in series_types:
         (cache_dir / series_type.value).mkdir(parents=True, exist_ok=True)
 
+    laterality_tally: Counter[LateralityOutcome] = Counter()
+    tally_lock = threading.Lock()  # Counter increments aren't atomic across workers
+
     def cache_one(row: int, series_type: SeriesType) -> bool:
         target = cache_path(cache_dir, series_type, row)
         if target.exists():
@@ -125,15 +137,20 @@ def build_pixel_cache(
         series_uid = best_series_of_type(series_groups.get(study_uids[row], no_series), series_type)
         if series_uid is None:
             return False
+        local_counts: Counter[LateralityOutcome] = Counter()
         try:
             volume = load_volume(
                 comp_root / TRAIN_SERIES_DIR / study_uids[row] / series_uid,
                 size=input_size,
                 crop_mm=crop_mm,
+                canonicalize_laterality=canonicalize_laterality,
+                laterality_counts=local_counts,
             )
         except (ValueError, DicomDecodeError) as exc:
             log(f"{series_type}: skipping series of study {row + 1}: {exc}")
             return False
+        with tally_lock:
+            laterality_tally.update(local_counts)
         np.save(target, (volume.numpy() * 255).astype(np.uint8))
         return True
 
@@ -149,7 +166,9 @@ def build_pixel_cache(
                 coverage[futures[future]] += 1
             if done % 500 == 0:
                 log(f"cached {done}/{len(futures)}")
-    return CacheBuildResult(n_studies=len(study_uids), coverage=coverage)
+    return CacheBuildResult(
+        n_studies=len(study_uids), coverage=coverage, laterality=dict(laterality_tally)
+    )
 
 
 def optimizer_param_groups(module: torch.nn.Module, lr: float, weight_decay: float) -> list[dict[str, object]]:
@@ -507,6 +526,7 @@ def finetune_unified(
     crop_mm: float | None = None,
     cell_weights: np.ndarray | None = None,
     label_source: str = "blended_v1",
+    laterality_normalized: bool = False,
     log: Callable[[str], None] = print,
 ) -> UnifiedFinetuneResult:
     """Fine-tune the unified multi-plane model end to end on cached 2.5D bags.
@@ -529,6 +549,8 @@ def finetune_unified(
         cell_weights: Optional (n_studies, 12) confidence weights; validation stays
             unweighted.
         label_source: Provenance string for the checkpoint.
+        laterality_normalized: Stamped into the checkpoint (must match the cache
+            build's `canonicalize_laterality`) so inference reproduces the frame.
         log: Progress sink (`print` in notebooks).
 
     Returns:
@@ -635,6 +657,7 @@ def finetune_unified(
         label_source=label_source,
         n_studies=len(train_rows),
         crop_mm=crop_mm,
+        laterality_normalized=laterality_normalized,
     )
     log(f"unified: best epoch {best_epoch + 1} (val macro {best_macro:.3f}) -> {out_path}")
     return UnifiedFinetuneResult(

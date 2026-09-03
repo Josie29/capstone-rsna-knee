@@ -80,6 +80,47 @@ def test_unified_checkpoint_predicts_all_studies_without_nan(tmp_path: Path) -> 
     assert (unreadable[list(LABEL_COLUMNS)] == 0.5).all().all()
 
 
+def test_inference_mirrors_inputs_for_normalized_checkpoints(tmp_path: Path) -> None:
+    """Catches the silent frame mismatch: a laterality-normalized checkpoint must
+    get canonicalized test volumes too. Feeding the raw frame would put left-knee
+    medial/lateral anatomy on the wrong side at scoring time — undoing the fix
+    exactly where it counts, with no error anywhere."""
+    from knee.model import MultiPlaneModel, save_multiplane_model
+
+    root = tmp_path / "root"
+    root.mkdir()
+    pd.DataFrame({STUDY_ID_COLUMN: ["study_left"]}).to_csv(root / "test.csv", index=False)
+    pd.DataFrame(
+        [("study_left", "ser_sag", "Sagittal", 1, 1)],
+        columns=[STUDY_ID_COLUMN, "SeriesInstanceUID", "Anatomical_Plane", "Fluid_Sensitive", "Fat_Suppression"],
+    ).to_csv(root / "test_series.csv", index=False)
+    # A left knee (patient-x well past the midline dead zone) whose slices differ,
+    # so canonicalization's stack reversal genuinely changes the model input.
+    rng = np.random.default_rng(7)
+    for i, x in enumerate((40.0, 42.0, 44.0, 46.0)):
+        write_dicom_slice(
+            root / "test_series" / "study_left" / "ser_sag" / f"s{i}.dcm",
+            rng.integers(0, 1000, (32, 32)),
+            instance_number=i,
+            image_position=(x, -50.0, 30.0),
+            image_orientation=(0.0, 1.0, 0.0, 0.0, 0.0, 1.0),  # sagittal, normal = +x
+            pixel_spacing=(1.0, 1.0),
+        )
+
+    model = MultiPlaneModel(series_types=[SeriesType.SAGITTAL_FLUID], pretrained=False)
+    model.eval()
+    save_multiplane_model(model, tmp_path / "norm.pt", input_size=64, laterality_normalized=True)
+    save_multiplane_model(model, tmp_path / "raw.pt", input_size=64, laterality_normalized=False)
+
+    normalized = predict_studies(root, [tmp_path / "norm.pt"], log=lambda _: None)
+    raw = predict_studies(root, [tmp_path / "raw.pt"], log=lambda _: None)
+    # Same weights, same files — only the declared frame differs, so the flag is
+    # the only thing that can move the output.
+    assert not np.allclose(
+        normalized[list(LABEL_COLUMNS)].to_numpy(), raw[list(LABEL_COLUMNS)].to_numpy()
+    )
+
+
 def test_ensemble_fans_out_merges_and_never_emits_nan(tmp_path: Path) -> None:
     """Catches the ensemble breaking on the real coverage gaps (~10% of studies lack
     a fluid plane; some series won't decode): a NaN or missing row in submission.csv
