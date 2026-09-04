@@ -204,6 +204,10 @@ def build_error_report(
                     comp_root / TRAIN_SERIES_DIR / study_uid / series_uid,
                     size=loaded.input_size,
                     crop_mm=loaded.crop_mm,
+                    # Match the checkpoint's training frame — auditing a
+                    # mirror-trained model on raw volumes corrupts every
+                    # left-knee study and invalidates the gold buckets.
+                    canonicalize_laterality=loaded.laterality_normalized,
                 )
             except (ValueError, DicomDecodeError):
                 continue
