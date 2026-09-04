@@ -18,6 +18,7 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
 
 | ID | Date | Data (labels / n / series) | Model | Eval protocol | Val AUC | Public LB | Inference runtime | Pointers |
 |---|---|---|---|---|---|---|---|---|
+| E010-anchors12 | 2026-09-04 | blended_v1 soft labels + tier weights / 4,407 / 4 slots | E009 config with n_anchors 8 -> 12 (near-full slice coverage), nothing else moved | fixed 90/10 holdout (seed 0, paired with E009) | pending | pending | train ~4-4.5h T4, single arm | this file (log below), kernels train v14 |
 | E009-laterality-sagt1 | 2026-09-03 | blended_v1 soft labels + tier weights / 4,407 / 4 sequence slots in one bag | E008 recipe + laterality normalization (canonical right-knee frame from patient-space geometry) + Sagittal T1 fourth slot | fixed 90/10 holdout (seed 0, paired with E008) | **0.803** (first run over the 0.80 bar; +0.018 vs E008) | **0.789** (new best, +0.016 over E003/E004's 0.773) | train ~3h47m T4 | this file (log below), PR #25, kernels train v13 |
 | E008-resnet-unified-finetune | 2026-09-03 | blended_v1 soft labels + tier weights / 4,407 / all planes in one bag | unified resnet34 fine-tuned on 8-anchor 2.5D bags, per-label attention, AMP + no-decay-norms trainer fixes | fixed 90/10 holdout (seed 0); frozen warm-up epochs = internal baseline | **0.785** (fine-tune WORKED: +0.081 over its frozen stage) | — (below the 0.80 bar, not submitted) | train ~2h20m T4 | this file (log below), PR #23, kernels train v12 |
 | E007-unified-multiplane | 2026-09-02 | blended_v1 soft labels + tier weights / 4,407 / all planes in one bag | ONE MultiPlaneModel: DINOv2 @224 fine-tuned, per-plane embeddings, per-label attention over the cross-plane bag — no combiner | fixed 90/10 holdout (seed 0, paired with E006) | 0.720 (best epoch = frozen warm-up; unfreeze regressed) | — (gate failed, not submitted) | train ~2h T4 | this file (log below), PR #22, kernels train v11 |
@@ -163,6 +164,16 @@ truth check. `gold58-cv` (retired with DECISIONS.md #5) was the same procedure o
   checkpoints (log the per-label plane-attention weights vs the clinical prior
   table — rediscovered or refuted, either is a finding and a deck beat).
   Submission gate: clear 0.783 decisively AND beat E006's paired number.
+- **Outcome:** _pending_
+
+### E010-anchors12
+- **Hypothesis:** slice coverage is the last known input gap. 8 anchors touch ~24
+  of a ~30-slice stack with gaps between triplets; findings in skipped slices are
+  invisible to the model regardless of attention. 12 anchors tile ~36 positions —
+  effectively full coverage. Own evidence: E005's full-slice frozen attention beat
+  sparse triplets by +0.014; the corrected E009 audit's ~2.9:1
+  model-error:label-error ratio says model levers still pay. Single lever, paired
+  vs E009's 0.803; submit only if >=0.80 AND beats 0.803.
 - **Outcome:** _pending_
 
 ### E009-laterality-sagt1
