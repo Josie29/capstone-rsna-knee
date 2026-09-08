@@ -8,7 +8,7 @@ appear only as speaker labels.
 **Format: 5 minutes total, three speakers, ~100 seconds each.**
 Order: Josie (model) → Kelly (labeling) → Ryan (harness).
 Kelly's and Ryan's sections are drafted skeletons — marked `KELLY-TODO` / `RYAN-TODO` —
-they own the final content. The earlier solo 11-slide version is in git history.
+they own the final content.
 
 ## Editing guide (Kelly & Ryan)
 
@@ -19,8 +19,8 @@ they own the final content. The earlier solo 11-slide version is in git history.
 - House rules: no leaderboard/prize-money references (say "hidden test set"); model
   builds are team work — individual names appear only as speaker labels; ~100 seconds
   per speaker; verify rendering by opening `deck.html` in a browser before pushing.
-- Read "Iteration notes" at the bottom before restructuring — it records decisions
-  already made (and reversed) so we don't relitigate them.
+- Read "Iteration notes" at the bottom before restructuring — it records the standing
+  design decisions.
 
 ---
 
@@ -75,7 +75,7 @@ Table — one row per experiment, verdict glyph (✓ paid / ∅ null / ✗ crash
 | v2 | rebuild: EfficientNet, 2-level attention | 0.868 test ✓ |
 | v3 | + non-fluid series, 24-slice depth | **0.887 test** ✓ |
 
-Talk track (carries the former slide-4 content): "Ten controlled experiments, then a
+Talk track: "Ten controlled experiments, then a
 rebuild. Two crashes — fp16 gradients silently underflowing at backbone unfreeze, one
 missing gradient scaler. One lesson — DINOv2 won our local eval and exactly tied on the
 hidden test: local CV against mined labels measures agreement with the miner, not skill
@@ -174,14 +174,14 @@ rate, chance diagonal, shaded area labeled AUC ≈ 0.89, one marked threshold po
 ## Iteration notes
 
 - Timing: Josie slides 1–3 (~10s/50s/40s), Kelly 4–5 (~100s), Ryan 6–7 (~100s) — leaves ~60s buffer for transitions/demo latency in a 5-minute slot.
-- The former "What Moved the Number" lever-ledger slide was folded into slide 2 (table + talk track) — Josie was running over 100s at 4 slides.
+- The lever story (what paid / what didn't) lives entirely in slide 2's table + talk track — no separate ledger slide; Josie's segment stays at 3 slides to hold ~100s.
 - Chart protocol caveat: the local-validation series mixes eval protocols (blended-cv for E003–E005, fixed 90/10 holdout E006–E010, 5-fold CV vs mined labels for v2/v3) — the caption says "local eval" generically; if a judge asks, the honest answer is the protocol followed the training regime.
 - v2/v3 are the pipeline rebuild (branch `feat/knee-cnn-v3`): EfficientNet-B0 2.5D encoder, slice-then-series attention with bucket embeddings, 5-fold, cached volumes. v2 = 3 fluid buckets/depth 16; v3 = 5 buckets/depth 24. Local numbers: v2 mean val 0.840 (gold58 0.848), v3 mean val 0.848 (gold58 0.855). The v2→v3 rebuild jump vs E009 is uncontrolled (many changes at once) — no single-lever attribution claimed on the slide.
 - The v3 test point (0.887) landing exactly on the old miner-vs-gold ceiling line (0.887) is coincidence — different quantities. Worth one spoken beat, not a claim.
-- The "random guessing scores 0.5" comparison was cut from slide 2 (too basic for the headline) — it lives in appendix A1, where the metric is explained properly.
+- No "random guessing scores 0.5" framing on the main slides (too basic for a headline) — the 0.5 baseline belongs in appendix A1, where the metric is explained properly.
 - Appendix slides sit after slide 7 in `deck.html`; they are backup material for Q&A, not part of the timed 5 minutes.
 - Slide 2 frontloads the result by design: the audience gets the payoff before the two handoffs. v3 is highlighted as the best (ring + hot label + table-row accent).
 - Josie's segment ends on the +0.081 handoff (slide 3 footer) into Kelly's section; Kelly's ends on the test-score payoff; Ryan closes with why-it-matters for the team.
-- The war stories (gradient scaler, mirror-image knees) live in slide 2's talk track; full versions in the solo deck (git history).
+- The war stories (gradient scaler, mirror-image knees) stay compressed to one line each in slide 2's talk track — no dedicated slides; full detail is Q&A material from `docs/experiments.md`.
 - All E-series deltas and audit counts trace to `docs/experiments.md` (E001–E010). v2/v3 numbers come from the `feat/knee-cnn-v3` branch logs + the Kaggle submissions list — they have NO registry rows yet; add them when the branch merges. Chart data for the 58-gold positives (if Kelly wants it) is in `docs/competition-notes.md`.
 - `deck.html` is synced to this 7-slide structure; the bottom-left corner shows the active speaker per slide (via `data-speaker`). Kelly/Ryan draft slides carry amber "draft"/"placeholder" badges — remove when they finalize.
