@@ -87,18 +87,6 @@
            padding: var(--s6); }
   .chart .title { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em;
                   text-transform: uppercase; color: var(--ink-2); margin-bottom: var(--s4); }
-  .row { display: grid; grid-template-columns: 9.5rem 1fr 2rem; align-items: center;
-         gap: var(--s3); margin-bottom: 0.45rem; }
-  .row .lbl { font-size: 0.78rem; color: var(--ink-2); text-align: right;
-              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .row .track { height: 0.9rem; position: relative; }
-  .row .bar { position: absolute; inset: 0 auto 0 0; background: var(--teal);
-              border-radius: 0 4px 4px 0; min-width: 3px; transition: filter 120ms; }
-  .row:hover .bar { filter: brightness(1.25); }
-  .row .val { font-family: var(--mono); font-variant-numeric: tabular-nums;
-              font-size: 0.75rem; color: var(--ink-2); }
-  .gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--hairline); }
-
   /* slide 2: experiment chart + registry table */
   .result-cols { display: grid; grid-template-columns: 11fr 9fr; gap: clamp(1.5rem, 3vw, 3rem);
                  align-items: center; }
@@ -132,16 +120,6 @@
                        transform: translateY(-50%); color: var(--ink-3); font-size: 0.9rem; z-index: 2; }
   .arch .node:last-child::after { content: none; }
   @media (max-width: 56rem) { .arch .node::after { content: none; } }
-
-  /* audit 2x2 tiles */
-  .audit { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); max-width: 30rem; margin-top: var(--s6); }
-  .audit .cell { background: var(--panel); border: 1px solid var(--hairline); border-radius: 6px;
-                 padding: var(--s3) var(--s4); }
-  .audit .cell .v { font-family: var(--mono); font-variant-numeric: tabular-nums;
-                    font-size: clamp(1.3rem, 2.4vw, 1.8rem); font-weight: 600; }
-  .audit .cell .k { font-size: 0.78rem; color: var(--ink-2); margin-top: var(--s1); line-height: 1.35; }
-  .audit .cell.hot { border-color: color-mix(in oklab, var(--teal) 60%, transparent); }
-  .audit .cell.hot .v { color: var(--teal-text); }
 
   .tbd { display: inline-block; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
          color: var(--amber-text); border: 1px solid color-mix(in oklab, var(--amber) 55%, transparent);
@@ -364,50 +342,23 @@
 
   <!-- 4 · The Label Problem — Kelly, ~50s · KELLY-TODO -->
   <section class="slide" data-speaker="Kelly · Labels">
-    <div class="cols">
-      <div>
-        <p class="eyebrow">The label problem <span class="tbd">Kelly · draft</span></p>
-        <h2>Only 58 of 4,407 studies are labeled. 1.3%.</h2>
-        <ul class="points">
-          <li>The other <strong>98.7%</strong> carry only a free-text radiology report —
-              in <strong>~a dozen languages</strong> across ~20 countries</li>
-          <li>The report <strong>does not exist at test time</strong> — text is a training
-              tool, not an input</li>
-          <li>Mining pipeline: <span class="accent">multilingual report &rarr; 12 pseudo-labels
-              per study</span>, validated against the 58 gold studies</li>
-          <li>The miner agrees with gold at <strong>0.887 AUC</strong> — the ceiling on
-              everything downstream</li>
-        </ul>
-      </div>
-      <div class="chart" id="chart">
-        <div class="title">Positives per finding · the 58 gold-labeled studies</div>
-        <!-- bars injected by script -->
-      </div>
-    </div>
+    <p class="eyebrow">The label problem <span class="tbd">Kelly · placeholder</span></p>
+    <h2>Only 58 of 4,407 studies are labeled</h2>
+    <ul class="points">
+      <li class="dim">The label problem: [KELLY]</li>
+      <li class="dim">How the labels were mined: [KELLY]</li>
+      <li class="dim">How mining quality was validated: [KELLY]</li>
+    </ul>
   </section>
 
-  <!-- 5 · The Student Catches the Teacher — Kelly, ~50s · KELLY-TODO -->
+  <!-- 5 · Labeling, part 2 — Kelly, ~50s · KELLY-TODO -->
   <section class="slide" data-speaker="Kelly · Labels">
-    <div class="cols">
-      <div>
-        <p class="eyebrow">Gold audit · 696 cells (58 studies &times; 12 findings) <span class="tbd">Kelly · draft</span></p>
-        <h2>The student catches the teacher</h2>
-        <ul class="points">
-          <li>The model trains on mined labels — <strong>then audits them</strong> against
-              the gold ground truth, cell by cell</li>
-          <li>The <span class="accent">48 caught cells</span> are direct input for miner v2:
-              the imaging model has become a label-error detector for its own teacher</li>
-          <li><strong>Payoff:</strong> 0.691 &rarr; 0.773 on the hidden test set
-              <strong>without one new expert annotation</strong></li>
-        </ul>
-      </div>
-      <div class="audit">
-        <div class="cell"><div class="v">420</div><div class="k">both right</div></div>
-        <div class="cell"><div class="v">141</div><div class="k">model wrong, label fine</div></div>
-        <div class="cell hot"><div class="v">48</div><div class="k">model right where the mined label was wrong</div></div>
-        <div class="cell"><div class="v">87</div><div class="k">both wrong</div></div>
-      </div>
-    </div>
+    <p class="eyebrow">Labeling, part 2 <span class="tbd">Kelly · placeholder</span></p>
+    <h2>[KELLY]</h2>
+    <ul class="points">
+      <li class="dim">[KELLY]</li>
+      <li class="dim">[KELLY]</li>
+    </ul>
   </section>
 
   <!-- 6 · The Harness — Ryan, ~50s · RYAN-TODO -->
@@ -502,24 +453,6 @@
 </div>
 
 <script>
-  // Chart data: positives per finding among the 58 gold-labeled studies (docs/competition-notes.md)
-  const FINDINGS = [
-    ["Effusion", 35], ["Synovitis", 27], ["Medial Meniscus", 26], ["ACL", 24],
-    ["Lateral Meniscus", 23], ["PF OA", 21], ["Contusion", 19], ["Fracture", 18],
-    ["Medial OA", 15], ["Baker's Cyst", 12], ["Lateral OA", 11], ["MCL", 9],
-  ];
-  const chart = document.getElementById("chart");
-  const MAX = 40; // axis max above top value for headroom
-  for (const [name, n] of FINDINGS) {
-    const row = document.createElement("div");
-    row.className = "row";
-    row.title = `${name}: ${n} of 58 studies positive`;
-    row.innerHTML = `<span class="lbl">${name}</span>` +
-      `<span class="track"><span class="bar" style="width:${(n / MAX) * 100}%"></span></span>` +
-      `<span class="val">${n}</span>`;
-    chart.appendChild(row);
-  }
-
   // Deck navigation
   const slides = [...document.querySelectorAll(".slide")];
   const counter = document.getElementById("counter");

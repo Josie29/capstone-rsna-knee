@@ -114,23 +114,23 @@ labels. Kelly."
 
 ## Slide 4 — KELLY-TODO: The Label Problem (~50s)
 
-**Only 58 of 4,407 training studies are labeled. 1.3%.**
+Placeholder — Kelly to write. Josie's handoff into this slide is "+0.081 came from the
+labels", so it should open on the label problem (only 58 of 4,407 studies labeled).
 
-Seed beats (from the repo — Kelly to shape):
-
-- The other 98.7% carry only a free-text radiology report — ~a dozen languages, ~20 countries — and the report field does not exist at test time
-- Mining pipeline: multilingual report → 12 pseudo-labels per study, validated against the 58 gold studies
-- The miner agrees with gold at **0.887 AUC** — that's the ceiling on everything downstream
+- The label problem: [KELLY]
+- How the labels were mined: [KELLY]
+- How mining quality was validated: [KELLY]
+- (If useful: positives-per-finding chart data is in `docs/competition-notes.md`)
 
 ---
 
-## Slide 5 — KELLY-TODO: The Student Catches the Teacher (~50s)
+## Slide 5 — KELLY-TODO: Labeling, part 2 (~50s)
 
-Seed beats:
+Placeholder — Kelly to write; ends her segment, hands off to Ryan.
 
-- The trained model audited its own training labels: of 696 gold cells, it caught **48 cells where the mined label was wrong**
-- Those 48 become the seed for miner v2 — the imaging model is now a label-error detector for its own teacher
-- Payoff line: 0.691 → 0.773 on the hidden test set without one new expert annotation
+- [KELLY]
+- [KELLY]
+- (If useful: the gold-audit counts live in `docs/experiments.md`)
 
 ---
 
@@ -181,7 +181,7 @@ rate, chance diagonal, shaded area labeled AUC ≈ 0.89, one marked threshold po
 - No "random guessing scores 0.5" framing on the main slides (too basic for a headline) — the 0.5 baseline belongs in appendix A1, where the metric is explained properly.
 - Appendix slides sit after slide 7 in `deck.html`; they are backup material for Q&A, not part of the timed 5 minutes.
 - Slide 2 frontloads the result by design: the audience gets the payoff before the two handoffs. v3 is highlighted as the best (ring + hot label + table-row accent).
-- Josie's segment ends on the +0.081 handoff (slide 3 footer) into Kelly's section; Kelly's ends on the test-score payoff; Ryan closes with why-it-matters for the team.
+- Josie's segment ends on the +0.081 handoff (slide 3 footer) into Kelly's section; Ryan closes with why-it-matters for the team.
 - The war stories (gradient scaler, mirror-image knees) stay compressed to one line each in slide 2's talk track — no dedicated slides; full detail is Q&A material from `docs/experiments.md`.
 - All E-series deltas and audit counts trace to `docs/experiments.md` (E001–E010). v2/v3 numbers come from the `feat/knee-cnn-v3` branch logs + the Kaggle submissions list — they have NO registry rows yet; add them when the branch merges. Chart data for the 58-gold positives (if Kelly wants it) is in `docs/competition-notes.md`.
 - `deck.html` is synced to this 7-slide structure; the bottom-left corner shows the active speaker per slide (via `data-speaker`). Kelly/Ryan draft slides carry amber "draft"/"placeholder" badges — remove when they finalize.
