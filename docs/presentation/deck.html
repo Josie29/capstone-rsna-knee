@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Reading the Scans, Mining the Reports — Capstone Deck</title>
 <style>
   /* Radiology reading-room theme — deliberately single-theme, like the viewer it echoes. */
@@ -43,7 +44,7 @@
   .chrome.tl { top: 1rem; left: 1.25rem; }
   .chrome.tr { top: 1rem; right: 1.25rem; text-align: right; }
   .chrome.br { bottom: 1rem; right: 1.25rem; text-align: right; }
-  .chrome.bl { bottom: 1rem; left: 1.25rem; }
+  .chrome.bl { bottom: 1rem; left: 1.25rem; color: var(--ink-2); }
   .chrome .im { color: var(--ink-2); }
   .progress { position: fixed; bottom: 0; left: 0; height: 2px; background: var(--teal);
               width: 0; transition: width 200ms ease; z-index: 10; }
@@ -53,10 +54,10 @@
   h1 { font-size: clamp(2.4rem, 5.5vw, 4.2rem); font-weight: 700; line-height: 1.08;
        letter-spacing: -0.015em; margin: 0 0 var(--s4); text-wrap: balance; }
   h2 { font-size: clamp(1.7rem, 3.4vw, 2.6rem); font-weight: 700; line-height: 1.15;
-       letter-spacing: -0.01em; margin: 0 0 var(--s6); text-wrap: balance; max-width: 24ch; }
-  .sub { color: var(--ink-2); font-size: clamp(1.05rem, 1.9vw, 1.35rem); max-width: 46ch; margin: 0; }
+       letter-spacing: -0.01em; margin: 0 0 var(--s6); text-wrap: balance; max-width: 28ch; }
+  .sub { color: var(--ink-2); font-size: clamp(1.05rem, 1.9vw, 1.35rem); max-width: 52ch; margin: 0; }
 
-  ul.points { margin: 0; padding: 0; list-style: none; max-width: 62ch; }
+  ul.points { margin: 0; padding: 0; list-style: none; max-width: 66ch; }
   ul.points li { padding-left: 1.4rem; position: relative; margin-bottom: var(--s3); color: var(--ink); }
   ul.points li::before { content: ""; position: absolute; left: 0; top: 0.62em;
                          width: 0.55rem; height: 2px; background: var(--teal); }
@@ -98,27 +99,53 @@
               font-size: 0.75rem; color: var(--ink-2); }
   .gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--hairline); }
 
-  /* pipeline */
-  .pipe { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s3); margin: var(--s8) 0 var(--s6); }
-  @media (max-width: 56rem) { .pipe { grid-template-columns: 1fr 1fr; } }
-  .stage { background: var(--panel); border: 1px solid var(--hairline); border-radius: 8px;
-           padding: var(--s4); position: relative; }
-  .stage .n { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em;
-              color: var(--teal-text); }
-  .stage h3 { margin: var(--s2) 0 var(--s2); font-size: 1.1rem; font-weight: 600; }
-  .stage p { margin: 0; font-size: 0.85rem; color: var(--ink-2); line-height: 1.45; }
-  .stage::after { content: "\2192"; /* → between stage cards */ position: absolute; right: -0.95rem; top: 50%;
-                  transform: translateY(-50%); color: var(--ink-3); font-size: 1rem; z-index: 2; }
-  .stage:last-child::after, .stage:nth-child(2n)::after { content: none; }
-  @media (min-width: 56.01rem) { .stage:nth-child(2n):not(:last-child)::after { content: "\2192"; } }
+  /* slide 2: experiment chart + registry table */
+  .result-cols { display: grid; grid-template-columns: 11fr 9fr; gap: clamp(1.5rem, 3vw, 3rem);
+                 align-items: center; }
+  @media (max-width: 56rem) { .result-cols { grid-template-columns: 1fr; } }
+  .legend { display: flex; gap: var(--s4); font-family: var(--mono); font-size: 0.68rem;
+            letter-spacing: 0.06em; color: var(--ink-2); margin-bottom: var(--s2); }
+  .legend .sw { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px;
+                margin-right: 0.35rem; vertical-align: -0.08rem; }
+  table.exp { border-collapse: collapse; width: 100%; font-family: var(--mono);
+              font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+  table.exp td { padding: 0.32rem 0.5rem 0.32rem 0; border-bottom: 1px solid var(--hairline);
+                 color: var(--ink-2); line-height: 1.3; }
+  table.exp td:first-child { color: var(--ink-3); white-space: nowrap; }
+  table.exp td:last-child { text-align: right; white-space: nowrap; padding-right: 0.25rem; }
+  table.exp .v-paid { color: var(--teal-text); }
+  table.exp .v-null { color: var(--ink-3); }
+  table.exp .v-crash { color: var(--amber-text); }
+  table.exp tr.best td { color: var(--ink); background: color-mix(in oklab, var(--teal) 10%, transparent); }
+  table.exp tr.best td:first-child { color: var(--teal-text); font-weight: 600; }
 
-  /* scoreboard */
-  table.score { border-collapse: collapse; margin-top: var(--s6); min-width: min(38rem, 100%); }
-  table.score td { padding: var(--s3) var(--s6) var(--s3) 0; border-bottom: 1px solid var(--hairline); }
-  table.score td:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; padding-right: 0; }
+  /* slide 3: architecture flow */
+  .arch { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s3); margin: var(--s8) 0 var(--s4); }
+  @media (max-width: 56rem) { .arch { grid-template-columns: 1fr 1fr; } }
+  .arch .node { background: var(--panel); border: 1px solid var(--hairline); border-radius: 8px;
+                padding: var(--s3) var(--s2); position: relative; text-align: center; }
+  .arch .node svg { display: block; margin: 0 auto var(--s2); width: 82%; height: auto; }
+  .arch .node h4 { margin: 0; font-size: 0.82rem; font-weight: 600; color: var(--ink); }
+  .arch .node p { margin: 0.2rem 0 0; font-family: var(--mono); font-size: 0.62rem;
+                  color: var(--ink-2); line-height: 1.4; }
+  .arch .node::after { content: "\2192"; /* → between nodes */ position: absolute; right: -0.85rem; top: 50%;
+                       transform: translateY(-50%); color: var(--ink-3); font-size: 0.9rem; z-index: 2; }
+  .arch .node:last-child::after { content: none; }
+  @media (max-width: 56rem) { .arch .node::after { content: none; } }
+
+  /* audit 2x2 tiles */
+  .audit { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); max-width: 30rem; margin-top: var(--s6); }
+  .audit .cell { background: var(--panel); border: 1px solid var(--hairline); border-radius: 6px;
+                 padding: var(--s3) var(--s4); }
+  .audit .cell .v { font-family: var(--mono); font-variant-numeric: tabular-nums;
+                    font-size: clamp(1.3rem, 2.4vw, 1.8rem); font-weight: 600; }
+  .audit .cell .k { font-size: 0.78rem; color: var(--ink-2); margin-top: var(--s1); line-height: 1.35; }
+  .audit .cell.hot { border-color: color-mix(in oklab, var(--teal) 60%, transparent); }
+  .audit .cell.hot .v { color: var(--teal-text); }
+
   .tbd { display: inline-block; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
          color: var(--amber-text); border: 1px solid color-mix(in oklab, var(--amber) 55%, transparent);
-         border-radius: 999px; padding: 0.1rem 0.6rem; }
+         border-radius: 999px; padding: 0.1rem 0.6rem; margin-left: var(--s2); vertical-align: middle; }
 
   .footer-note { margin-top: var(--s8); font-family: var(--mono); font-size: 0.72rem;
                  letter-spacing: 0.08em; color: var(--ink-3); text-transform: uppercase; }
@@ -132,63 +159,224 @@
 
 <div class="chrome tl">RSNA Knee Abnormality Detection</div>
 <div class="chrome tr">Gauntlet AI · Capstone</div>
-<div class="chrome bl">Josie Machalek</div>
-<div class="chrome br"><span class="im" id="counter">IM 1 / 10</span></div>
+<div class="chrome bl" id="speaker">Josie</div>
+<div class="chrome br"><span class="im" id="counter">IM 1 / 8</span></div>
 <div class="progress" id="progress"></div>
 <div class="navhint" id="navhint">&#8592; &#8594; or click to navigate</div>
 
 <div class="deck" id="deck">
 
-  <!-- 1 · Title -->
-  <section class="slide">
+  <!-- 1 · Title — Josie, ~10s -->
+  <section class="slide" data-speaker="Josie · Kelly · Ryan">
     <p class="eyebrow">Weakly-supervised medical imaging</p>
     <h1>Reading the Scans,<br>Mining the Reports</h1>
-    <p class="sub">Detecting 12 knee-MRI abnormalities when 98.7% of the training labels
-       have to be mined out of multilingual radiology reports first.</p>
+    <p class="sub">0.887 macro AUC on the hidden test set across 12 knee-MRI findings —
+       trained with 58 ground-truth labels and 4,349 we mined ourselves.</p>
     <div class="stats">
-      <div class="stat"><div class="v">$77k</div><div class="k">Kaggle · RSNA 2026</div></div>
-      <div class="stat"><div class="v">12</div><div class="k">findings per study</div></div>
-      <div class="stat hot"><div class="v">1.3%</div><div class="k">of studies labeled</div></div>
+      <div class="stat hot"><div class="v">0.887</div><div class="k">test-set macro AUC</div></div>
+      <div class="stat"><div class="v">58</div><div class="k">ground-truth studies</div></div>
+      <div class="stat"><div class="v">1.3%</div><div class="k">of studies labeled</div></div>
+    </div>
+    <p class="footer-note">Josie Machalek · Kelly · Ryan &mdash; RSNA Knee Abnormality Detection (Kaggle, 2026)</p>
+  </section>
+
+  <!-- 2 · The Result — Josie, ~50s -->
+  <section class="slide" data-speaker="Josie · Model">
+    <p class="eyebrow">The result · ten controlled experiments, then a rebuild</p>
+    <h2>From 58 ground-truth labels to 0.887 macro AUC</h2>
+    <div class="result-cols">
+      <div class="chart">
+        <div class="legend">
+          <span><span class="sw" style="background:#93A3B7"></span>local eval</span>
+          <span><span class="sw" style="background:#4FC8C2; transform:rotate(45deg); display:inline-block"></span>submitted · hidden test</span>
+        </div>
+        <svg viewBox="0 0 640 400" role="img" style="width:100%; height:auto; display:block"
+             aria-label="Macro AUC across experiments E001 to E010 and the pipeline rebuild v2 and v3. A muted local-evaluation line dips at the two fine-tune crashes, climbs to 0.803, then jumps with the rebuild. Teal diamonds mark the seven submitted hidden-test scores rising from 0.691 to a highlighted best of 0.887 at v3. Dashed reference lines mark the 0.80 submission bar and the 0.887 label ceiling.">
+          <!-- gridlines + y ticks -->
+          <g font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#5D6E84">
+            <line x1="46" y1="301" x2="610" y2="301" stroke="#24344A" stroke-width="1"/><text x="40" y="304" text-anchor="end">0.70</text>
+            <line x1="46" y1="230" x2="610" y2="230" stroke="#24344A" stroke-width="1"/><text x="40" y="233" text-anchor="end">0.75</text>
+            <line x1="46" y1="89" x2="610" y2="89" stroke="#24344A" stroke-width="1"/><text x="40" y="92" text-anchor="end">0.85</text>
+          </g>
+          <!-- reference lines -->
+          <line x1="46" y1="160" x2="610" y2="160" stroke="#5D6E84" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="50" y="153" text-anchor="start" fill="#93A3B7" font-size="10" font-family="ui-monospace, Menlo, monospace">0.80 submission bar</text>
+          <line x1="46" y1="36" x2="610" y2="36" stroke="#5D6E84" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="50" y="30" text-anchor="start" fill="#93A3B7" font-size="10" font-family="ui-monospace, Menlo, monospace">0.887 label ceiling &#183; miner vs gold</text>
+          <!-- local eval series (E003..E010, v2, v3) -->
+          <path d="M158,201 L207,184 L256,179 L305,233 L354,273 L404,181 L453,155 L502,161 L551,103 L600,92"
+                fill="none" stroke="#93A3B7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <g fill="#93A3B7">
+            <circle cx="158" cy="201" r="3.5"/><circle cx="207" cy="184" r="3.5"/>
+            <circle cx="256" cy="179" r="3.5"/><circle cx="305" cy="233" r="3.5"/>
+            <circle cx="354" cy="273" r="3.5"/><circle cx="404" cy="181" r="3.5"/>
+            <circle cx="453" cy="155" r="3.5"/><circle cx="502" cy="161" r="3.5"/>
+            <circle cx="551" cy="103" r="3.5"/><circle cx="600" cy="92" r="3.5"/>
+          </g>
+          <!-- submitted series (diamonds) -->
+          <g fill="#4FC8C2" stroke="#0D1420" stroke-width="1">
+            <rect x="54" y="308" width="12" height="12" transform="rotate(45 60 314)"/>
+            <rect x="103" y="307" width="12" height="12" transform="rotate(45 109 313)"/>
+            <rect x="152" y="192" width="12" height="12" transform="rotate(45 158 198)"/>
+            <rect x="201" y="192" width="12" height="12" transform="rotate(45 207 198)"/>
+            <rect x="447" y="169" width="12" height="12" transform="rotate(45 453 175)"/>
+            <rect x="545" y="57" width="12" height="12" transform="rotate(45 551 63)"/>
+            <rect x="593" y="30" width="14" height="14" transform="rotate(45 600 37)"/>
+          </g>
+          <!-- best-experiment highlight ring -->
+          <circle cx="600" cy="37" r="13" fill="none" stroke="#4FC8C2" stroke-width="1.5" opacity="0.85"/>
+          <!-- direct labels on story points -->
+          <g font-family="ui-monospace, Menlo, monospace">
+            <text x="60" y="338" text-anchor="middle" fill="#93A3B7" font-size="11">0.691</text>
+            <text x="182" y="222" text-anchor="middle" fill="#93A3B7" font-size="11">0.773</text>
+            <text x="207" y="170" text-anchor="middle" fill="#5D6E84" font-size="9.5">cv won, test tied</text>
+            <text x="330" y="296" text-anchor="middle" fill="#5D6E84" font-size="9.5">fine-tune crashes</text>
+            <text x="453" y="199" text-anchor="middle" fill="#93A3B7" font-size="10">0.789</text>
+            <text x="536" y="67" text-anchor="end" fill="#93A3B7" font-size="10">0.868</text>
+            <text x="600" y="72" text-anchor="middle" fill="#4FC8C2" font-size="15" font-weight="700">0.887</text>
+          </g>
+          <!-- x axis -->
+          <line x1="46" y1="372" x2="610" y2="372" stroke="#24344A" stroke-width="1"/>
+          <g font-family="ui-monospace, Menlo, monospace" font-size="9" fill="#5D6E84" text-anchor="middle">
+            <text x="60" y="388">E001</text><text x="109" y="388">E002</text><text x="158" y="388">E003</text>
+            <text x="207" y="388">E004</text><text x="256" y="388">E005</text><text x="305" y="388">E006</text>
+            <text x="354" y="388">E007</text><text x="404" y="388">E008</text><text x="453" y="388">E009</text>
+            <text x="502" y="388">E010</text><text x="551" y="388">v2</text><text x="600" y="388">v3</text>
+          </g>
+        </svg>
+      </div>
+      <table class="exp">
+        <tr><td>E001</td><td>pipeline check, 58 gold labels</td><td>0.691 test</td></tr>
+        <tr><td>E002</td><td>clinical plane prior</td><td class="v-null">+0.001 &#8709;</td></tr>
+        <tr><td>E003</td><td>mined labels 58 &rarr; 4,407</td><td class="v-paid"><strong>+0.081 test</strong> &#10003;</td></tr>
+        <tr><td>E004</td><td>DINOv2 backbone</td><td class="v-null">+0.012 cv &rarr; 0.000 test &#8709;</td></tr>
+        <tr><td>E005</td><td>per-label attention</td><td class="v-paid">+0.014 &#10003;</td></tr>
+        <tr><td>E006</td><td>fine-tune the stack</td><td class="v-crash">crash &#10007;</td></tr>
+        <tr><td>E007</td><td>unified multi-plane</td><td class="v-crash">crash &#10007;</td></tr>
+        <tr><td>E008</td><td>fixed fine-tune recipe</td><td class="v-paid">+0.037 &#10003;</td></tr>
+        <tr><td>E009</td><td>laterality + Sagittal T1</td><td class="v-paid">+0.018 &rarr; 0.789 test &#10003;</td></tr>
+        <tr><td>E010</td><td>denser slice sampling</td><td class="v-null">&#8722;0.004 &#8709;</td></tr>
+        <tr><td>v2</td><td>rebuild: EfficientNet, 2-level attention</td><td class="v-paid">0.868 test &#10003;</td></tr>
+        <tr class="best"><td>v3</td><td>+ non-fluid series, 24-slice depth</td><td class="v-paid"><strong>0.887 test</strong> &#10003;</td></tr>
+      </table>
     </div>
   </section>
 
-  <!-- 2 · The Task -->
-  <section class="slide">
-    <p class="eyebrow">The task</p>
+  <!-- 3 · The Model — Josie, ~40s -->
+  <section class="slide" data-speaker="Josie · Model">
+    <p class="eyebrow">The model</p>
     <h2>One knee MRI study in, 12 probabilities out</h2>
     <ul class="points">
-      <li><strong>Input:</strong> a multi-planar MRI study — sagittal, coronal, axial;
-          fluid-sensitive and non-fluid sequences <span class="dim">(~5.5 series per study)</span></li>
-      <li><strong>Output:</strong> per-study probability for 12 binary findings — ACL, MCL,
-          both menisci, 3 osteoarthritis compartments, effusion, synovitis, Baker's cyst,
-          contusion, fracture</li>
-      <li><strong>Scored by macro-averaged ROC AUC</strong> — every finding counts equally,
-          rare or common</li>
-      <li><strong>Delivered as a Kaggle notebook</strong> — no internet, 9-hour runtime cap</li>
+      <li><strong>Input:</strong> a multi-planar MRI study; <strong>output:</strong> per-study
+          probability for 12 binary findings — ligaments, menisci, osteoarthritis, effusion, fracture&hellip;</li>
+      <li><strong>Scored by macro-averaged ROC AUC</strong>; delivered as an offline
+          Kaggle notebook, 9-hour cap</li>
     </ul>
-    <div class="stats">
-      <div class="stat"><div class="v">4,407</div><div class="k">train studies</div></div>
-      <div class="stat"><div class="v">24,371</div><div class="k">train series</div></div>
-      <div class="stat"><div class="v">247&nbsp;GiB</div><div class="k">image data</div></div>
-      <div class="stat"><div class="v">~1,300</div><div class="k">test studies</div></div>
+    <div class="arch">
+      <div class="node">
+        <svg viewBox="0 0 90 54" aria-hidden="true">
+          <rect x="14" y="6" width="46" height="30" rx="3" fill="none" stroke="#5D6E84" stroke-width="1.5"/>
+          <rect x="22" y="12" width="46" height="30" rx="3" fill="none" stroke="#93A3B7" stroke-width="1.5"/>
+          <rect x="30" y="18" width="46" height="30" rx="3" fill="#182436" stroke="#4FC8C2" stroke-width="1.5"/>
+        </svg>
+        <h4>Study</h4><p>~5.5 series<br>6 series types</p>
+      </div>
+      <div class="node">
+        <svg viewBox="0 0 90 54" aria-hidden="true">
+          <g stroke-width="1.5" fill="#182436">
+            <rect x="4" y="14" width="13" height="26" rx="2" stroke="#4FC8C2"/>
+            <rect x="21" y="14" width="13" height="26" rx="2" stroke="#4FC8C2"/>
+            <rect x="38" y="14" width="13" height="26" rx="2" stroke="#4FC8C2"/>
+            <rect x="55" y="14" width="13" height="26" rx="2" stroke="#93A3B7" stroke-dasharray="3 2"/>
+            <rect x="72" y="14" width="13" height="26" rx="2" stroke="#93A3B7" stroke-dasharray="3 2"/>
+          </g>
+        </svg>
+        <h4>Select</h4><p>5 series buckets<br>3 fluid + 2 non-fluid</p>
+      </div>
+      <div class="node">
+        <svg viewBox="0 0 90 54" aria-hidden="true">
+          <g stroke="#93A3B7" stroke-width="2" stroke-linecap="round">
+            <line x1="14" y1="8" x2="76" y2="8"/><line x1="14" y1="14" x2="76" y2="14"/>
+            <line x1="14" y1="20" x2="76" y2="20"/><line x1="14" y1="26" x2="76" y2="26"/>
+            <line x1="14" y1="32" x2="76" y2="32"/><line x1="14" y1="38" x2="76" y2="38"/>
+          </g>
+          <line x1="14" y1="46" x2="76" y2="46" stroke="#4FC8C2" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <h4>Resample</h4><p>24 slices per series<br>cached volumes @224</p>
+      </div>
+      <div class="node">
+        <svg viewBox="0 0 90 54" aria-hidden="true">
+          <rect x="12" y="8" width="66" height="38" rx="4" fill="#182436" stroke="#4FC8C2" stroke-width="1.5"/>
+          <line x1="28" y1="8" x2="28" y2="46" stroke="#24344A" stroke-width="1.5"/>
+          <line x1="44" y1="8" x2="44" y2="46" stroke="#24344A" stroke-width="1.5"/>
+          <line x1="60" y1="8" x2="60" y2="46" stroke="#24344A" stroke-width="1.5"/>
+        </svg>
+        <h4>EfficientNet-B0</h4><p>one shared 2.5D encoder<br>~5M params</p>
+      </div>
+      <div class="node">
+        <svg viewBox="0 0 90 54" aria-hidden="true">
+          <g fill="#93A3B7">
+            <circle cx="14" cy="9" r="3"/><circle cx="14" cy="21" r="3"/><circle cx="14" cy="33" r="3"/><circle cx="14" cy="45" r="3"/>
+          </g>
+          <g stroke="#4FC8C2" stroke-linecap="round">
+            <line x1="18" y1="9" x2="72" y2="27" stroke-width="0.75" opacity="0.35"/>
+            <line x1="18" y1="21" x2="72" y2="27" stroke-width="2.5" opacity="0.95"/>
+            <line x1="18" y1="33" x2="72" y2="27" stroke-width="1.5" opacity="0.6"/>
+            <line x1="18" y1="45" x2="72" y2="27" stroke-width="0.75" opacity="0.35"/>
+          </g>
+          <circle cx="76" cy="27" r="4" fill="#4FC8C2"/>
+        </svg>
+        <h4>Slice attention</h4><p>pool 24 slices<br>&rarr; series embedding</p>
+      </div>
+      <div class="node">
+        <svg viewBox="0 0 90 54" aria-hidden="true">
+          <g stroke-width="1.5" fill="#182436">
+            <rect x="8" y="4" width="20" height="10" rx="2" stroke="#4FC8C2"/>
+            <rect x="8" y="18" width="20" height="10" rx="2" stroke="#4FC8C2"/>
+            <rect x="8" y="32" width="20" height="10" rx="2" stroke="#4FC8C2"/>
+            <rect x="8" y="46" width="20" height="6" rx="2" stroke="#5D6E84" stroke-dasharray="3 2"/>
+          </g>
+          <g stroke="#4FC8C2" stroke-linecap="round">
+            <line x1="30" y1="9" x2="72" y2="26" stroke-width="1.2" opacity="0.55"/>
+            <line x1="30" y1="23" x2="72" y2="26" stroke-width="2.4" opacity="0.95"/>
+            <line x1="30" y1="37" x2="72" y2="26" stroke-width="1.6" opacity="0.7"/>
+          </g>
+          <circle cx="76" cy="26" r="4" fill="#4FC8C2"/>
+        </svg>
+        <h4>Series attention</h4><p>+ bucket embedding<br>masked over available series</p>
+      </div>
+      <div class="node">
+        <svg viewBox="0 0 90 54" aria-hidden="true">
+          <g fill="#4FC8C2">
+            <rect x="12" y="8" width="52" height="4" rx="2"/>
+            <rect x="12" y="16" width="30" height="4" rx="2"/>
+            <rect x="12" y="24" width="60" height="4" rx="2"/>
+            <rect x="12" y="32" width="20" height="4" rx="2" opacity="0.6"/>
+            <rect x="12" y="40" width="42" height="4" rx="2"/>
+          </g>
+        </svg>
+        <h4>12 probabilities</h4><p>one per finding<br>per study</p>
+      </div>
     </div>
+    <p class="sub">The biggest lever isn't in this diagram — <strong class="accent">+0.081</strong>
+       came from the labels. <strong>Kelly.</strong></p>
   </section>
 
-  <!-- 3 · The Catch -->
-  <section class="slide">
+  <!-- 4 · The Label Problem — Kelly, ~50s · KELLY-TODO -->
+  <section class="slide" data-speaker="Kelly · Labels">
     <div class="cols">
       <div>
-        <p class="eyebrow">The catch</p>
-        <h2>Only 58 of 4,407 studies are labeled</h2>
+        <p class="eyebrow">The label problem <span class="tbd">Kelly · draft</span></p>
+        <h2>Only 58 of 4,407 studies are labeled. 1.3%.</h2>
         <ul class="points">
           <li>The other <strong>98.7%</strong> carry only a free-text radiology report —
               in <strong>~a dozen languages</strong> across ~20 countries</li>
           <li>The report <strong>does not exist at test time</strong> — text is a training
               tool, not an input</li>
-          <li>So the real task: <span class="accent">mine labels from reports, then train
-              an imaging model on what you mined</span></li>
-          <li>The 58 gold studies are the only ground truth to validate the mining —
-              far too few to steer model selection alone</li>
+          <li>Mining pipeline: <span class="accent">multilingual report &rarr; 12 pseudo-labels
+              per study</span>, validated against the 58 gold studies</li>
+          <li>The miner agrees with gold at <strong>0.887 AUC</strong> — the ceiling on
+              everything downstream</li>
         </ul>
       </div>
       <div class="chart" id="chart">
@@ -198,119 +386,117 @@
     </div>
   </section>
 
-  <!-- 4 · The Plan -->
-  <section class="slide">
-    <p class="eyebrow">The plan</p>
-    <h2>Four stages, mined labels first</h2>
-    <div class="pipe">
-      <div class="stage"><span class="n">STAGE 01</span><h3>Mine</h3>
-        <p>Multilingual report &rarr; 12 pseudo-labels per study, validated against the 58 gold studies.</p></div>
-      <div class="stage"><span class="n">STAGE 02</span><h3>Select</h3>
-        <p>Pick the right series per study — 6 types (3 planes &times; fluid / non-fluid) — decode and normalize DICOM.</p></div>
-      <div class="stage"><span class="n">STAGE 03</span><h3>Train</h3>
-        <p>Pretrained 2D backbones per plane, fused to study-level predictions, trained on pseudo-labels.</p></div>
-      <div class="stage"><span class="n">STAGE 04</span><h3>Submit</h3>
-        <p>Offline inference notebook, weights attached as datasets, budgeted under 9 hours.</p></div>
+  <!-- 5 · The Student Catches the Teacher — Kelly, ~50s · KELLY-TODO -->
+  <section class="slide" data-speaker="Kelly · Labels">
+    <div class="cols">
+      <div>
+        <p class="eyebrow">Gold audit · 696 cells (58 studies &times; 12 findings) <span class="tbd">Kelly · draft</span></p>
+        <h2>The student catches the teacher</h2>
+        <ul class="points">
+          <li>The model trains on mined labels — <strong>then audits them</strong> against
+              the gold ground truth, cell by cell</li>
+          <li>The <span class="accent">48 caught cells</span> are direct input for miner v2:
+              the imaging model has become a label-error detector for its own teacher</li>
+          <li><strong>Payoff:</strong> 0.691 &rarr; 0.773 on the hidden test set
+              <strong>without one new expert annotation</strong></li>
+        </ul>
+      </div>
+      <div class="audit">
+        <div class="cell"><div class="v">420</div><div class="k">both right</div></div>
+        <div class="cell"><div class="v">141</div><div class="k">model wrong, label fine</div></div>
+        <div class="cell hot"><div class="v">48</div><div class="k">model right where the mined label was wrong</div></div>
+        <div class="cell"><div class="v">87</div><div class="k">both wrong</div></div>
+      </div>
     </div>
-    <p class="sub"><strong class="accent">Sequencing insight:</strong> mining quality sets the ceiling
-       on everything downstream — and it can be built and iterated without touching a single DICOM.</p>
   </section>
 
-  <!-- 5 · Stage 1 -->
-  <section class="slide">
-    <p class="eyebrow">Stage 01 · Mine</p>
-    <h2>The ceiling-setter: reports become labels</h2>
+  <!-- 6 · The Harness — Ryan, ~50s · RYAN-TODO -->
+  <section class="slide" data-speaker="Ryan · Harness">
+    <p class="eyebrow">The harness <span class="tbd">Ryan · placeholder</span></p>
+    <h2>Putting the model in a clinician's workflow</h2>
     <ul class="points">
-      <li>A multilingual encoder reads each report and emits 12 binary pseudo-labels</li>
-      <li><span class="dim">Rejected — regex/keyword rules:</span> ~12 languages &times; 12 findings
-          &times; negation handling is brittle beyond a sanity pass</li>
-      <li><span class="dim">Rejected — translate-then-English-model:</span> adds a failure stage;
-          multilingual encoders skip it</li>
-      <li>Validation: per-finding agreement with the 58 gold studies</li>
-      <li><strong>Every point of label noise here is noise the imaging model trains on</strong></li>
-    </ul>
-    <table class="score">
-      <tr><td>Miner agreement vs gold set</td><td><span class="tbd">TBD</span></td></tr>
-    </table>
-  </section>
-
-  <!-- 6 · Stages 2+3 -->
-  <section class="slide">
-    <p class="eyebrow">Stages 02–03 · Select &amp; Train</p>
-    <h2>From 247 GiB of DICOM to a model</h2>
-    <ul class="points">
-      <li>Series metadata collapses to <strong>6 types</strong> — 3 planes &times; fluid-sensitive /
-          non-fluid. Every study has all 3 planes, so <em>selection</em> is the decision, not availability</li>
-      <li>Mixed compression (JPEG Lossless, JPEG 2000, uncompressed) — half the data
-          won't decode without the right handlers</li>
-      <li>Per-plane 2D backbones over slices &rarr; series aggregate &rarr; plane fusion &rarr;
-          12 study-level probabilities</li>
-      <li>Trained on Kaggle GPUs with the data pre-mounted — skipping the 247 GiB download entirely</li>
-    </ul>
-    <table class="score">
-      <tr><td>Final architecture</td><td><span class="tbd">TBD</span></td></tr>
-      <tr><td>Cross-validation macro AUC</td><td><span class="tbd">TBD</span></td></tr>
-    </table>
-  </section>
-
-  <!-- 7 · Stage 4 -->
-  <section class="slide">
-    <p class="eyebrow">Stage 04 · Submit</p>
-    <h2>The 9-hour box</h2>
-    <ul class="points">
-      <li><strong>No internet:</strong> code and weights ship as Kaggle datasets attached to the notebook</li>
-      <li>~1,300 studies &times; ~30 slices &times; several series must fit in 9 hours —
-          inference cost was budgeted <em>before</em> choosing an architecture</li>
-      <li><strong>Efficiency track:</strong> a second prize pool scores AUC per unit runtime —
-          being fast is itself a leaderboard</li>
-      <li>The repo is the source of truth — notebooks are thin wrappers over
-          <code>src/knee/</code>, deployed by API, never edited in the web UI</li>
+      <li>Productizing the model for a clinician: an AI harness where a doctor's LLM
+          assistant can <strong>call the imaging model</strong> to help make diagnoses</li>
+      <li class="dim">What it does: [model probabilities + per-finding attention overlays
+          exposed as tools the LLM can invoke]</li>
+      <li class="dim">Stack / architecture: [RYAN]</li>
     </ul>
   </section>
 
-  <!-- 8 · Results -->
-  <section class="slide">
-    <p class="eyebrow">Results</p>
-    <h2>The scoreboard</h2>
-    <p class="sub">Filled in as runs land — the deck stays honest about status.</p>
-    <table class="score">
-      <tr><td>Miner agreement vs 58 gold studies</td><td><span class="tbd">TBD</span></td></tr>
-      <tr><td>Cross-validation macro AUC</td><td><span class="tbd">TBD</span></td></tr>
-      <tr><td>Public leaderboard macro AUC</td><td><span class="tbd">TBD</span></td></tr>
-      <tr><td>Inference runtime</td><td><span class="tbd">TBD</span> / 9h</td></tr>
-    </table>
-    <p class="footer-note">Baseline: all-0.5 sample submission scores 0.5 AUC</p>
-  </section>
-
-  <!-- 9 · Why it matters -->
-  <section class="slide">
-    <p class="eyebrow">Why this matters</p>
+  <!-- 7 · Demo + Why This Matters — Ryan, ~50s · RYAN-TODO -->
+  <section class="slide" data-speaker="Ryan · Harness">
+    <p class="eyebrow">Demo &amp; why this matters <span class="tbd">Ryan · placeholder</span></p>
     <h2>Radiologist time is the scarcest input in medical AI</h2>
     <ul class="points">
-      <li>Expert annotation is the bottleneck — labeling thousands of MRI studies by hand
-          doesn't scale</li>
-      <li>But hospitals already hold millions of studies <strong>with reports attached</strong> —
+      <li class="dim">Demo: [doctor asks a question &rarr; LLM pulls model findings +
+          attention overlay for a study]</li>
+      <li>Hospitals already hold millions of studies <strong>with reports attached</strong> —
           weak supervision from reports is how those archives get unlocked</li>
-      <li>Multilingual mining is the realistic version of the problem: real archives span
-          languages and sites <span class="dim">(this dataset: 22 sites, ~20 countries)</span></li>
-      <li>The recipe generalizes to any paired image + report modality — chest X-ray, CT, pathology</li>
+      <li>Our numbers make it concrete: 0.691 to 0.887
+          <strong>without one new expert annotation</strong></li>
+      <li>The recipe generalizes: mine reports &rarr; train an imaging model &rarr; put it
+          in a clinician's workflow — chest X-ray, CT, pathology</li>
     </ul>
+    <p class="footer-note">Final submission deadline · 2026-10-22 · 0.887 public score and climbing</p>
   </section>
 
-  <!-- 10 · What's next -->
-  <section class="slide">
-    <p class="eyebrow">What's next</p>
-    <h2>Extensions on the table</h2>
-    <ul class="points">
-      <li><strong>Better miner:</strong> LLM-based labeling vs local encoder
-          <span class="dim">(pending a rules check on sending report text to external APIs)</span></li>
-      <li><strong>Self-training loop:</strong> retrain miner and imaging model on each other's
-          confident predictions</li>
-      <li><strong>3D architectures:</strong> does true volumetric context pay for its runtime?</li>
-      <li><strong>Per-finding calibration:</strong> macro AUC rewards ranking each finding well independently</li>
-      <li><strong>Efficiency track:</strong> distillation and pruning for the runtime-scored prize pool</li>
-    </ul>
-    <p class="footer-note">Final submission deadline · 2026-10-22</p>
+  <!-- A1 · Appendix: ROC AUC explainer — backup for Q&A, not in the timed 5 minutes -->
+  <section class="slide" data-speaker="Appendix" data-appendix>
+    <div class="cols">
+      <div>
+        <p class="eyebrow">Appendix · The evaluation metric</p>
+        <h2>ROC AUC, in one picture</h2>
+        <ul class="points">
+          <li>Each finding gets a probability; <strong>ROC</strong> sweeps every possible
+              decision threshold and plots true-positive rate vs false-positive rate</li>
+          <li><strong>AUC</strong> = area under that curve = the probability a random
+              positive study is <em>ranked above</em> a random negative one —
+              threshold-free, robust to class imbalance</li>
+          <li><strong>0.5</strong> = no signal <span class="dim">(a coin flip ranks pairs
+              correctly half the time)</span>; <strong>1.0</strong> = perfect ranking</li>
+          <li><strong>Macro</strong> = AUC per finding, all 12 averaged equally —
+              a rare fracture counts as much as a common effusion</li>
+          <li>Our <span class="accent"><strong>0.887</strong></span>: the model ranks a
+              random abnormal study above a random normal one <strong>~89%</strong> of
+              the time, averaged across findings</li>
+        </ul>
+      </div>
+      <div class="chart">
+        <div class="title">One finding's ROC curve · area shaded = AUC</div>
+        <svg viewBox="0 0 460 400" role="img" style="width: 100%; height: auto; display: block;"
+             aria-label="ROC curve: true-positive rate against false-positive rate. A teal curve bows above the dashed chance diagonal; the shaded area under it is the AUC, about 0.79. One threshold is marked as a point on the curve.">
+          <!-- plot frame -->
+          <line x1="60" y1="340" x2="420" y2="340" stroke="#24344A" stroke-width="1"/>
+          <line x1="60" y1="340" x2="60" y2="20" stroke="#24344A" stroke-width="1"/>
+          <!-- shaded AUC area under the curve -->
+          <path d="M60,340 C 64,290 70,230 78,196 C 85,170 90,158 96,148 C 108,128 120,112 132,103
+                   C 155,85 180,70 204,62 C 230,53 255,47 276,42 C 300,36 325,31 348,28 C 375,25 400,22 420,20 L420,340 Z"
+                fill="#17A39A" fill-opacity="0.16"/>
+          <!-- chance diagonal -->
+          <line x1="60" y1="340" x2="420" y2="20" stroke="#5D6E84" stroke-width="1.5" stroke-dasharray="5 5"/>
+          <!-- ROC curve -->
+          <path d="M60,340 C 64,290 70,230 78,196 C 85,170 90,158 96,148 C 108,128 120,112 132,103
+                   C 155,85 180,70 204,62 C 230,53 255,47 276,42 C 300,36 325,31 348,28 C 375,25 400,22 420,20"
+                fill="none" stroke="#4FC8C2" stroke-width="2" stroke-linecap="round"/>
+          <!-- one threshold, marked -->
+          <circle cx="132" cy="103" r="5" fill="#4FC8C2" stroke="#131D2C" stroke-width="2"/>
+          <text x="146" y="98" fill="#93A3B7" font-size="12" font-family="ui-monospace, Menlo, monospace">one threshold</text>
+          <!-- direct labels -->
+          <text x="250" y="200" fill="#4FC8C2" font-size="16" font-weight="600"
+                font-family="ui-monospace, Menlo, monospace">AUC &#8776; 0.89</text>
+          <text x="290" y="158" fill="#5D6E84" font-size="12" font-family="ui-monospace, Menlo, monospace"
+                transform="rotate(-41 290 158)">chance &#183; AUC 0.50</text>
+          <!-- axis ticks + titles -->
+          <text x="56" y="354" fill="#5D6E84" font-size="11" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">0</text>
+          <text x="420" y="354" fill="#5D6E84" font-size="11" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">1</text>
+          <text x="48" y="24" fill="#5D6E84" font-size="11" text-anchor="end" font-family="ui-monospace, Menlo, monospace">1</text>
+          <text x="240" y="378" fill="#93A3B7" font-size="12" text-anchor="middle" font-family="ui-monospace, Menlo, monospace"
+                letter-spacing="1">FALSE-POSITIVE RATE &#8594;</text>
+          <text x="24" y="180" fill="#93A3B7" font-size="12" text-anchor="middle" font-family="ui-monospace, Menlo, monospace"
+                letter-spacing="1" transform="rotate(-90 24 180)">TRUE-POSITIVE RATE &#8594;</text>
+        </svg>
+      </div>
+    </div>
   </section>
 
 </div>
@@ -339,13 +525,19 @@
   const counter = document.getElementById("counter");
   const progress = document.getElementById("progress");
   const navhint = document.getElementById("navhint");
+  const speaker = document.getElementById("speaker");
   let cur = Math.min(Math.max((parseInt(location.hash.slice(1), 10) || 1) - 1, 0), slides.length - 1);
+
+  const mainCount = slides.filter((s) => !s.hasAttribute("data-appendix")).length;
 
   function show(i) {
     cur = Math.min(Math.max(i, 0), slides.length - 1);
     slides.forEach((s, j) => s.classList.toggle("active", j === cur));
-    counter.textContent = `IM ${cur + 1} / ${slides.length}`;
-    progress.style.width = `${((cur + 1) / slides.length) * 100}%`;
+    counter.textContent = cur < mainCount
+      ? `IM ${cur + 1} / ${mainCount}`
+      : `APPENDIX A${cur - mainCount + 1}`;
+    speaker.textContent = slides[cur].dataset.speaker || "";
+    progress.style.width = `${(Math.min(cur + 1, mainCount) / mainCount) * 100}%`;
     history.replaceState(null, "", `#${cur + 1}`);
     if (cur > 0) navhint.style.opacity = "0";
   }
