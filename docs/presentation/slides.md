@@ -7,8 +7,8 @@ appear only as speaker labels.
 
 **Format: 5 minutes total, three speakers, ~100 seconds each.**
 Order: Josie (model) → Kelly (labeling) → Ryan (harness).
-Kelly's and Ryan's sections are drafted skeletons — marked `KELLY-TODO` / `RYAN-TODO` —
-they own the final content.
+Kelly's section is still a drafted skeleton — marked `KELLY-TODO` — she owns the final
+content. Ryan's slides (6–8) are final.
 
 ## Editing guide (Kelly & Ryan)
 
@@ -140,24 +140,47 @@ Placeholder — Kelly to write; ends her segment, hands off to Ryan.
 
 ---
 
-## Slide 6 — RYAN-TODO: The Harness (~50s)
+## Slide 6 — Early wins (Ryan, ~33s)
 
-Placeholder from one-line description — Ryan to replace. Technical depth (stack,
-tool-calling design, ...) can go to an appendix slide for Q&A — see the editing guide.
+**Early wins for AI-augmented systems**
 
-- Productizing the model for a clinician: an AI harness where a doctor's LLM assistant can call the imaging model to help make diagnoses
-- What it does: [model probabilities + per-finding attention overlays exposed as tools the LLM can invoke?]
-- Stack / architecture: [RYAN]
+Visual: the Nature Cancer paper on AI for breast cancer screening
+(`assets/early-wins-breast-screening.webp`) mounted left, statement right.
+
+- Single diagnosis
+- Rapidly identifiable symptoms
 
 ---
 
-## Slide 7 — RYAN-TODO: Demo + Why This Matters (~50s)
+## Slide 7 — The frontier (Ryan, ~33s)
 
-Placeholder — Ryan to replace with demo beat, then close for the team:
+**Now the frontier looks more…**
 
-- Demo: [doctor asks a question → LLM pulls model findings + attention overlay for a study]
-- Why it matters: expert annotation is the bottleneck of medical AI; hospitals already hold millions of studies with reports attached — this recipe (mine reports → train imaging model → put it in a clinician's workflow) unlocks those archives
-- Competition deadline 2026-10-22 — 0.887 public score and climbing
+Visual: the review harness — three linked knee-MRI viewports with the attention overlay
+lit, beside the findings panel (`assets/frontier-review-ui.webp`) — mounted left, the
+three points right.
+
+1. Broad: multiple, simultaneous diagnoses
+2. Complex: disentangling injuries that often concur
+3. Ambiguous: final diagnoses where often <u>panels of doctors disagree</u> on full scope of injury
+
+---
+
+## Slide 8 — The harness (Ryan, ~33s)
+
+**Radiologists are fundamentally accountable.
+Let’s give them the best thought partner to resolve the trickiest cases.**
+
+- DICOM processing pipeline
+  `:: Slice ordering, standard cropping, instance manifest`
+- MSK reasoning skills
+  `:: area tracing, diagnosis thresholds, response schema`
+- Judgement panels: MMLMs + ViT
+  `:: See scans through multiple architectures`
+- Ambiguity resolution focused platform
+  `:: Takes radiologists to the most difficult to resolve questions`
+
+→ **Faster, more accurate diagnoses with less cognitive load.**
 
 ---
 
@@ -180,15 +203,17 @@ rate, chance diagonal, shaded area labeled AUC ≈ 0.89, one marked threshold po
 
 ## Iteration notes
 
-- Timing: Josie slides 1–3 (~10s/50s/40s), Kelly 4–5 (~100s), Ryan 6–7 (~100s) — leaves ~60s buffer for transitions/demo latency in a 5-minute slot.
+- Timing: Josie slides 1–3 (~10s/50s/40s), Kelly 4–5 (~100s), Ryan 6–8 (~33s each, ~100s) — leaves ~60s buffer for transitions/demo latency in a 5-minute slot.
 - The lever story (what paid / what didn't) lives entirely in slide 2's table + talk track — no separate ledger slide; Josie's segment stays at 3 slides to hold ~100s.
 - Chart protocol caveat: the local-validation series mixes eval protocols (blended-cv for E003–E005, fixed 90/10 holdout E006–E010, 5-fold CV vs mined labels for v2/v3) — the caption says "local eval" generically; if a judge asks, the honest answer is the protocol followed the training regime.
 - v2/v3 are the pipeline rebuild (branch `feat/knee-cnn-v3`): EfficientNet-B0 2.5D encoder, slice-then-series attention with bucket embeddings, 5-fold, cached volumes. v2 = 3 fluid buckets/depth 16; v3 = 5 buckets/depth 24. Local numbers: v2 mean val 0.840 (gold58 0.848), v3 mean val 0.848 (gold58 0.855). The v2→v3 rebuild jump vs E009 is uncontrolled (many changes at once) — no single-lever attribution claimed on the slide.
 - The v3 test point (0.887) landing exactly on the old miner-vs-gold ceiling line (0.887) is coincidence — different quantities. Worth one spoken beat, not a claim.
 - No "random guessing scores 0.5" framing on the main slides (too basic for a headline) — the 0.5 baseline belongs in appendix A1, where the metric is explained properly.
-- Appendix slides sit after slide 7 in `deck.html`; they are backup material for Q&A, not part of the timed 5 minutes.
+- Appendix slides sit after slide 8 in `deck.html`; they are backup material for Q&A, not part of the timed 5 minutes.
 - Slide 2 frontloads the result by design: the audience gets the payoff before the two handoffs. v3 is highlighted as the best (ring + hot label + table-row accent).
 - Josie's segment ends on the +0.081 handoff (slide 3 footer) into Kelly's section; Ryan closes with why-it-matters for the team.
 - The war stories (gradient scaler, mirror-image knees) stay compressed to one line each in slide 2's talk track — no dedicated slides; full detail is Q&A material from `docs/experiments.md`.
 - All E-series deltas and audit counts trace to `docs/experiments.md` (E001–E010). v2/v3 numbers come from the `feat/knee-cnn-v3` branch logs + the Kaggle submissions list — they have NO registry rows yet; add them when the branch merges. Chart data for the 58-gold positives (if Kelly wants it) is in `docs/competition-notes.md`.
-- `deck.html` is synced to this 7-slide structure; the bottom-left corner shows the active speaker per slide (via `data-speaker`). Kelly/Ryan draft slides carry amber "draft"/"placeholder" badges — remove when they finalize.
+- `deck.html` is synced to this 8-slide structure; the bottom-left corner shows the active speaker per slide (via `data-speaker`). Kelly's draft slides carry amber "draft"/"placeholder" badges — remove when she finalizes.
+- Slides 6–7 mount a screenshot beside a statement. The two captures arrive on opposite grounds (the quoted paper is white to its own edges, the reviewer UI near-black), and neither is recoloured, inverted or filtered — that would alter Ryan's slides. Instead both get the same frame, radius and lift, over a surface matched to the capture (`.shot.paper` white, `.shot.viewport` `--panel-2`), so they read as one kind of object. Images live in `docs/presentation/assets/` as WebP rather than inline base64, to keep `deck.html` diffable.
+- Ryan's slides carry no written talk track — the wording on the slides is his, taken verbatim from his own deck, and he speaks to it.
