@@ -12,7 +12,7 @@ they own the final content.
 
 ## Editing guide (Kelly & Ryan)
 
-- Edit only your own slide sections; work on a feature branch and PR as usual.
+- Edit only your own slide sections; committing straight to main is fine.
 - This file is the source of truth — change it first, then sync your slides in
   `deck.html` (your slides are the `<section>` blocks with your name in `data-speaker`;
   remove the amber draft/placeholder badge when done).
