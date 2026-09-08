@@ -1,0 +1,165 @@
+[{"stream_name":"stderr","time":5.898852734,"data":"/usr/local/lib/python3.12/dist-packages/nbformat/__init__.py:96: MissingIDFieldWarning: Cell is missing an id field, this will become a hard error in future nbformat versions. You may want to use `normalize()` on your notebooks before validations (available since nbformat 5.1.4). Previous versions of nbformat are fixing this issue transparently, and will stop doing so in the future.\n"}
+,{"stream_name":"stderr","time":5.899383587,"data":"  validate(nb)\n"}
+,{"stream_name":"stderr","time":6.718950428,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":6.71897832,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":6.718981758,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":6.718984316,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":7.288187785,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":7.288217318,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":7.288222187,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":7.2882274,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":37.862304742,"data":"VOL /kaggle/input/datasets/barun2104/rsna-knee-mri-processed-3d-volumes cached volumes: 24371\n"}
+,{"stream_name":"stdout","time":37.862352816,"data":"sag_fs: 4150/4407 = 94.2% studies with cached npz for chosen series\n"}
+,{"stream_name":"stdout","time":37.862359119,"data":"cor_fs: 4248/4407 = 96.4% studies with cached npz for chosen series\n"}
+,{"stream_name":"stdout","time":37.862363936,"data":"axi_fs: 4407/4407 = 100.0% studies with cached npz for chosen series\n"}
+,{"stream_name":"stdout","time":37.862368612,"data":"sag_nf: 4266/4407 = 96.8% studies with cached npz for chosen series\n"}
+,{"stream_name":"stdout","time":37.86237301,"data":"cor_nf: 3406/4407 = 77.3% studies with cached npz for chosen series\n"}
+,{"stream_name":"stdout","time":37.862378587,"data":"BUCKETS: ['sag_fs', 'cor_fs', 'axi_fs', 'sag_nf', 'cor_nf']\n"}
+,{"stream_name":"stdout","time":42.406154944,"data":"input tree:\n"}
+,{"stream_name":"stdout","time":50.943966285,"data":" DIR /kaggle/input/datasets nchildren 2\n"}
+,{"stream_name":"stdout","time":50.944028281,"data":" DIR /kaggle/input/datasets/barun2104 nchildren 1\n"}
+,{"stream_name":"stdout","time":50.944038559,"data":" DIR /kaggle/input/datasets/barun2104/rsna-knee-mri-processed-3d-volumes nchildren 24371\n"}
+,{"stream_name":"stdout","time":60.37633619,"data":" DIR /kaggle/input/datasets/kellyhe47 nchildren 1\n"}
+,{"stream_name":"stdout","time":60.376372387,"data":" DIR /kaggle/input/datasets/kellyhe47/knee-labels-v1 nchildren 6\n"}
+,{"stream_name":"stdout","time":60.478416204,"data":"cuda True Tesla T4\n"}
+,{"stream_name":"stdout","time":64.9154412,"data":"wrote train.py 16055\n"}
+,{"stream_name":"stdout","time":64.935491363,"data":"training BUCKETS ['sag_fs', 'cor_fs', 'axi_fs', 'sag_nf', 'cor_nf'] FOLDS [3, 4]\n"}
+,{"stream_name":"stdout","time":70.859642877,"data":"labels.csv -\u003e [PosixPath('/kaggle/input/datasets/kellyhe47/knee-labels-v1/labels.csv')] n 1\n"}
+,{"stream_name":"stdout","time":70.85968308,"data":"VOL /kaggle/input/datasets/barun2104/rsna-knee-mri-processed-3d-volumes\n"}
+,{"stream_name":"stdout","time":70.859690802,"data":"SRC /kaggle/input/datasets/kellyhe47/knee-labels-v1 VOL /kaggle/input/datasets/barun2104/rsna-knee-mri-processed-3d-volumes npz_sample /kaggle/input/datasets/barun2104/rsna-knee-mri-processed-3d-volumes/1.2.826.0.1.3680043.8.498.37299546703720579002544711086463626444.npz\n"}
+,{"stream_name":"stdout","time":70.859712096,"data":"/usr/bin/python3 /kaggle/working/train.py --cache /kaggle/working --volumes /kaggle/input/datasets/barun2104/rsna-knee-mri-processed-3d-volumes --series-csv /kaggle/input/datasets/kellyhe47/knee-labels-v1/train_series.csv --labels /kaggle/input/datasets/kellyhe47/knee-labels-v1/labels.csv --weights /kaggle/input/datasets/kellyhe47/knee-labels-v1/label_weights.csv --gold /kaggle/input/datasets/kellyhe47/knee-labels-v1/gold_58.csv --fold 3 --folds 5 --epochs 10 --bs 2 --accum 4 --model tf_efficientnet_b0 --buckets sag_fs,cor_fs,axi_fs,sag_nf,cor_nf --depth 24 --oof-csv /kaggle/working/oof_fold3.csv --out /kaggle/working\n"}
+,{"stream_name":"stderr","time":85.072670236,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":85.275300618,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":85.275365362,"data":"\n"}
+,{"stream_name":"stderr","time":85.275373392,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":87.898880097,"data":"device=cuda buckets=['sag_fs', 'cor_fs', 'axi_fs', 'sag_nf', 'cor_nf']\n"}
+,{"stream_name":"stdout","time":87.898915284,"data":"loss weights from /kaggle/input/datasets/kellyhe47/knee-labels-v1/label_weights.csv\n"}
+,{"stream_name":"stdout","time":87.898921029,"data":"no manifest_train.csv; building buckets from /kaggle/input/datasets/kellyhe47/knee-labels-v1/train_series.csv\n"}
+,{"stream_name":"stdout","time":87.898925392,"data":"4407 studies with labels and cached pixels (4407 labelled, 4407 cached)\n"}
+,{"stream_name":"stdout","time":87.898929917,"data":"fold 3: train=3480 val=869 gold_holdout=58\n"}
+,{"stream_name":"stdout","time":88.105034377,"data":"device=cuda buckets=['sag_fs', 'cor_fs', 'axi_fs', 'sag_nf', 'cor_nf']\n"}
+,{"stream_name":"stdout","time":88.105072404,"data":"loss weights from /kaggle/input/datasets/kellyhe47/knee-labels-v1/label_weights.csv\n"}
+,{"stream_name":"stdout","time":88.105097565,"data":"no manifest_train.csv; building buckets from /kaggle/input/datasets/kellyhe47/knee-labels-v1/train_series.csv\n"}
+,{"stream_name":"stdout","time":88.105104674,"data":"4407 studies with labels and cached pixels (4407 labelled, 4407 cached)\n"}
+,{"stream_name":"stdout","time":88.105110654,"data":"fold 3: train=3480 val=869 gold_holdout=58\n"}
+,{"stream_name":"stdout","time":1387.957868047,"data":"ep 1 loss=0.5802 val_macroAUC=0.7173 gold58=0.6640\n"}
+,{"stream_name":"stdout","time":1388.16359677,"data":"ep 1 loss=0.5802 val_macroAUC=0.7173 gold58=0.6640\n"}
+,{"stream_name":"stdout","time":2679.09691805,"data":"ep 2 loss=0.5338 val_macroAUC=0.7864 gold58=0.7591\n"}
+,{"stream_name":"stdout","time":2679.304192998,"data":"ep 2 loss=0.5338 val_macroAUC=0.7864 gold58=0.7591\n"}
+,{"stream_name":"stdout","time":3970.575061216,"data":"ep 3 loss=0.5164 val_macroAUC=0.8144 gold58=0.8154\n"}
+,{"stream_name":"stdout","time":3970.791509174,"data":"ep 3 loss=0.5164 val_macroAUC=0.8144 gold58=0.8154\n"}
+,{"stream_name":"stdout","time":5261.629441268,"data":"ep 4 loss=0.5037 val_macroAUC=0.8351 gold58=0.8257\n"}
+,{"stream_name":"stdout","time":5261.843255744,"data":"ep 4 loss=0.5037 val_macroAUC=0.8351 gold58=0.8257\n"}
+,{"stream_name":"stdout","time":6552.022303066,"data":"ep 5 loss=0.4930 val_macroAUC=0.8485 gold58=0.8445\n"}
+,{"stream_name":"stdout","time":6552.229079408,"data":"ep 5 loss=0.4930 val_macroAUC=0.8485 gold58=0.8445\n"}
+,{"stream_name":"stdout","time":7843.468048737,"data":"ep 6 loss=0.4827 val_macroAUC=0.8520 gold58=0.8457\n"}
+,{"stream_name":"stdout","time":7843.685135677,"data":"ep 6 loss=0.4827 val_macroAUC=0.8520 gold58=0.8457\n"}
+,{"stream_name":"stdout","time":9135.955894605,"data":"ep 7 loss=0.4762 val_macroAUC=0.8574 gold58=0.8475\n"}
+,{"stream_name":"stdout","time":9136.16270822,"data":"ep 7 loss=0.4762 val_macroAUC=0.8574 gold58=0.8475\n"}
+,{"stream_name":"stdout","time":10429.47650085,"data":"ep 8 loss=0.4697 val_macroAUC=0.8575 gold58=0.8511\n"}
+,{"stream_name":"stdout","time":10429.694898563,"data":"ep 8 loss=0.4697 val_macroAUC=0.8575 gold58=0.8511\n"}
+,{"stream_name":"stdout","time":11723.860056251,"data":"ep 9 loss=0.4652 val_macroAUC=0.8596 gold58=0.8470\n"}
+,{"stream_name":"stdout","time":11724.075673666,"data":"ep 9 loss=0.4652 val_macroAUC=0.8596 gold58=0.8470\n"}
+,{"stream_name":"stdout","time":13017.863662453,"data":"ep10 loss=0.4626 val_macroAUC=0.8584 gold58=0.8496\n"}
+,{"stream_name":"stdout","time":13017.877045336,"data":"\n"}
+,{"stream_name":"stdout","time":13017.877088573,"data":"best val macro AUC 0.8596  -\u003e /kaggle/working/fold3.pt\n"}
+,{"stream_name":"stdout","time":13017.877096306,"data":"  ACL                0.8532\n"}
+,{"stream_name":"stdout","time":13017.877101226,"data":"  MCL                0.8339\n"}
+,{"stream_name":"stdout","time":13017.877106058,"data":"  Medial Meniscus    0.9160\n"}
+,{"stream_name":"stdout","time":13017.87711083,"data":"  Lateral Meniscus   0.8411\n"}
+,{"stream_name":"stdout","time":13017.877141326,"data":"  Medial OA          0.8950\n"}
+,{"stream_name":"stdout","time":13017.877147181,"data":"  Lateral OA         0.8369\n"}
+,{"stream_name":"stdout","time":13017.877152816,"data":"  PF OA              0.7866\n"}
+,{"stream_name":"stdout","time":13017.877158288,"data":"  Effusion           0.8302\n"}
+,{"stream_name":"stdout","time":13017.877163712,"data":"  Synovitis          0.8588\n"}
+,{"stream_name":"stdout","time":13017.877168527,"data":"  Baker's            0.9093\n"}
+,{"stream_name":"stdout","time":13017.877173174,"data":"  Contusion          0.8863\n"}
+,{"stream_name":"stdout","time":13017.877177959,"data":"  Fracture           0.8537\n"}
+,{"stream_name":"stdout","time":13018.068455982,"data":"ep10 loss=0.4626 val_macroAUC=0.8584 gold58=0.8496\n"}
+,{"stream_name":"stdout","time":13018.068479583,"data":"\n"}
+,{"stream_name":"stdout","time":13018.068485085,"data":"best val macro AUC 0.8596  -\u003e /kaggle/working/fold3.pt\n"}
+,{"stream_name":"stdout","time":13018.068490342,"data":"  ACL                0.8532\n"}
+,{"stream_name":"stdout","time":13018.068494601,"data":"  MCL                0.8339\n"}
+,{"stream_name":"stdout","time":13018.068498655,"data":"  Medial Meniscus    0.9160\n"}
+,{"stream_name":"stdout","time":13018.068502693,"data":"  Lateral Meniscus   0.8411\n"}
+,{"stream_name":"stdout","time":13018.068507,"data":"  Medial OA          0.8950\n"}
+,{"stream_name":"stdout","time":13018.068510998,"data":"  Lateral OA         0.8369\n"}
+,{"stream_name":"stdout","time":13018.068515232,"data":"  PF OA              0.7866\n"}
+,{"stream_name":"stdout","time":13018.068519463,"data":"  Effusion           0.8302\n"}
+,{"stream_name":"stdout","time":13018.068523892,"data":"  Synovitis          0.8588\n"}
+,{"stream_name":"stdout","time":13018.06852813,"data":"  Baker's            0.9093\n"}
+,{"stream_name":"stdout","time":13018.068532323,"data":"  Contusion          0.8863\n"}
+,{"stream_name":"stdout","time":13018.068544975,"data":"  Fracture           0.8537\n"}
+,{"stream_name":"stdout","time":13021.410837232,"data":"/usr/bin/python3 /kaggle/working/train.py --cache /kaggle/working --volumes /kaggle/input/datasets/barun2104/rsna-knee-mri-processed-3d-volumes --series-csv /kaggle/input/datasets/kellyhe47/knee-labels-v1/train_series.csv --labels /kaggle/input/datasets/kellyhe47/knee-labels-v1/labels.csv --weights /kaggle/input/datasets/kellyhe47/knee-labels-v1/label_weights.csv --gold /kaggle/input/datasets/kellyhe47/knee-labels-v1/gold_58.csv --fold 4 --folds 5 --epochs 10 --bs 2 --accum 4 --model tf_efficientnet_b0 --buckets sag_fs,cor_fs,axi_fs,sag_nf,cor_nf --depth 24 --oof-csv /kaggle/working/oof_fold4.csv --out /kaggle/working\n"}
+,{"stream_name":"stderr","time":13027.905970788,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":13028.10838507,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":13028.108420272,"data":"\n"}
+,{"stream_name":"stderr","time":13028.108426386,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":13028.20016494,"data":"device=cuda buckets=['sag_fs', 'cor_fs', 'axi_fs', 'sag_nf', 'cor_nf']\n"}
+,{"stream_name":"stdout","time":13028.200219416,"data":"loss weights from /kaggle/input/datasets/kellyhe47/knee-labels-v1/label_weights.csv\n"}
+,{"stream_name":"stdout","time":13028.200231139,"data":"no manifest_train.csv; building buckets from /kaggle/input/datasets/kellyhe47/knee-labels-v1/train_series.csv\n"}
+,{"stream_name":"stdout","time":13028.20023677,"data":"4407 studies with labels and cached pixels (4407 labelled, 4407 cached)\n"}
+,{"stream_name":"stdout","time":13028.200242086,"data":"fold 4: train=3479 val=870 gold_holdout=58\n"}
+,{"stream_name":"stdout","time":13028.403239734,"data":"device=cuda buckets=['sag_fs', 'cor_fs', 'axi_fs', 'sag_nf', 'cor_nf']\n"}
+,{"stream_name":"stdout","time":13028.40327391,"data":"loss weights from /kaggle/input/datasets/kellyhe47/knee-labels-v1/label_weights.csv\n"}
+,{"stream_name":"stdout","time":13028.403306079,"data":"no manifest_train.csv; building buckets from /kaggle/input/datasets/kellyhe47/knee-labels-v1/train_series.csv\n"}
+,{"stream_name":"stdout","time":13028.403311643,"data":"4407 studies with labels and cached pixels (4407 labelled, 4407 cached)\n"}
+,{"stream_name":"stdout","time":13028.40331691,"data":"fold 4: train=3479 val=870 gold_holdout=58\n"}
+,{"stream_name":"stdout","time":14332.11199826,"data":"ep 1 loss=0.5803 val_macroAUC=0.7038 gold58=0.6773\n"}
+,{"stream_name":"stdout","time":14332.333069459,"data":"ep 1 loss=0.5803 val_macroAUC=0.7038 gold58=0.6773\n"}
+,{"stream_name":"stdout","time":15623.347345109,"data":"ep 2 loss=0.5351 val_macroAUC=0.7734 gold58=0.7702\n"}
+,{"stream_name":"stdout","time":15623.555485157,"data":"ep 2 loss=0.5351 val_macroAUC=0.7734 gold58=0.7702\n"}
+,{"stream_name":"stdout","time":16914.897501891,"data":"ep 3 loss=0.5172 val_macroAUC=0.8023 gold58=0.8068\n"}
+,{"stream_name":"stdout","time":16915.11414777,"data":"ep 3 loss=0.5172 val_macroAUC=0.8023 gold58=0.8068\n"}
+,{"stream_name":"stdout","time":18207.351559087,"data":"ep 4 loss=0.5047 val_macroAUC=0.8211 gold58=0.8087\n"}
+,{"stream_name":"stdout","time":18207.55985372,"data":"ep 4 loss=0.5047 val_macroAUC=0.8211 gold58=0.8087\n"}
+,{"stream_name":"stdout","time":19499.912315723,"data":"ep 5 loss=0.4934 val_macroAUC=0.8333 gold58=0.8249\n"}
+,{"stream_name":"stdout","time":19500.120243054,"data":"ep 5 loss=0.4934 val_macroAUC=0.8333 gold58=0.8249\n"}
+,{"stream_name":"stdout","time":20792.70422197,"data":"ep 6 loss=0.4830 val_macroAUC=0.8405 gold58=0.8407\n"}
+,{"stream_name":"stdout","time":20792.923187894,"data":"ep 6 loss=0.4830 val_macroAUC=0.8405 gold58=0.8407\n"}
+,{"stream_name":"stdout","time":22087.601182551,"data":"ep 7 loss=0.4754 val_macroAUC=0.8404 gold58=0.8442\n"}
+,{"stream_name":"stdout","time":22087.822134506,"data":"ep 7 loss=0.4754 val_macroAUC=0.8404 gold58=0.8442\n"}
+,{"stream_name":"stdout","time":23380.879773918,"data":"ep 8 loss=0.4686 val_macroAUC=0.8448 gold58=0.8439\n"}
+,{"stream_name":"stdout","time":23381.088613701,"data":"ep 8 loss=0.4686 val_macroAUC=0.8448 gold58=0.8439\n"}
+,{"stream_name":"stdout","time":24674.367964072,"data":"ep 9 loss=0.4648 val_macroAUC=0.8452 gold58=0.8456\n"}
+,{"stream_name":"stdout","time":24674.575388384,"data":"ep 9 loss=0.4648 val_macroAUC=0.8452 gold58=0.8456\n"}
+,{"stream_name":"stdout","time":25970.137258932,"data":"ep10 loss=0.4631 val_macroAUC=0.8448 gold58=0.8491\n"}
+,{"stream_name":"stdout","time":25970.151230658,"data":"\n"}
+,{"stream_name":"stdout","time":25970.151258355,"data":"best val macro AUC 0.8452  -\u003e /kaggle/working/fold4.pt\n"}
+,{"stream_name":"stdout","time":25970.15126532,"data":"  ACL                0.8845\n"}
+,{"stream_name":"stdout","time":25970.151269482,"data":"  MCL                0.8485\n"}
+,{"stream_name":"stdout","time":25970.151274469,"data":"  Medial Meniscus    0.8819\n"}
+,{"stream_name":"stdout","time":25970.151280001,"data":"  Lateral Meniscus   0.7997\n"}
+,{"stream_name":"stdout","time":25970.151284734,"data":"  Medial OA          0.8791\n"}
+,{"stream_name":"stdout","time":25970.15128963,"data":"  Lateral OA         0.7804\n"}
+,{"stream_name":"stdout","time":25970.151295345,"data":"  PF OA              0.7904\n"}
+,{"stream_name":"stdout","time":25970.151300585,"data":"  Effusion           0.8177\n"}
+,{"stream_name":"stdout","time":25970.151305579,"data":"  Synovitis          0.8794\n"}
+,{"stream_name":"stdout","time":25970.151309811,"data":"  Baker's            0.8951\n"}
+,{"stream_name":"stdout","time":25970.151314223,"data":"  Contusion          0.8232\n"}
+,{"stream_name":"stdout","time":25970.151318866,"data":"  Fracture           0.8575\n"}
+,{"stream_name":"stdout","time":25970.343542817,"data":"ep10 loss=0.4631 val_macroAUC=0.8448 gold58=0.8491\n"}
+,{"stream_name":"stdout","time":25970.343569812,"data":"\n"}
+,{"stream_name":"stdout","time":25970.343575187,"data":"best val macro AUC 0.8452  -\u003e /kaggle/working/fold4.pt\n"}
+,{"stream_name":"stdout","time":25970.34358041,"data":"  ACL                0.8845\n"}
+,{"stream_name":"stdout","time":25970.34358488,"data":"  MCL                0.8485\n"}
+,{"stream_name":"stdout","time":25970.343589027,"data":"  Medial Meniscus    0.8819\n"}
+,{"stream_name":"stdout","time":25970.343593393,"data":"  Lateral Meniscus   0.7997\n"}
+,{"stream_name":"stdout","time":25970.343597846,"data":"  Medial OA          0.8791\n"}
+,{"stream_name":"stdout","time":25970.343602518,"data":"  Lateral OA         0.7804\n"}
+,{"stream_name":"stdout","time":25970.343606934,"data":"  PF OA              0.7904\n"}
+,{"stream_name":"stdout","time":25970.343611315,"data":"  Effusion           0.8177\n"}
+,{"stream_name":"stdout","time":25970.343616192,"data":"  Synovitis          0.8794\n"}
+,{"stream_name":"stdout","time":25970.343620534,"data":"  Baker's            0.8951\n"}
+,{"stream_name":"stdout","time":25970.343624964,"data":"  Contusion          0.8232\n"}
+,{"stream_name":"stdout","time":25970.343629308,"data":"  Fracture           0.8575\n"}
+,{"stream_name":"stdout","time":25971.547717133,"data":"wrote /kaggle/working/oof_v3b.csv n=1739\n"}
+,{"stream_name":"stderr","time":25974.350893446,"data":"/usr/local/lib/python3.12/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":25974.350919116,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":25974.510773904,"data":"/usr/local/lib/python3.12/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":25974.510804815,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":25975.125356648,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":25975.416652507,"data":"[NbConvertApp] Writing 37077 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":25977.681372599,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":25978.476162353,"data":"[NbConvertApp] Writing 341962 bytes to __results__.html\n"}
+]

@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+"""
+Notebook 2 of 3: multi-label image classifier over cached MRI volumes.
+
+    python scripts/train.py --cache /kaggle/input/knee-cache --labels data/labels.csv \
+        --fold 0 --epochs 10 --model tf_efficientnet_b0
+
+No text at inference time, so this is a pure vision model. Targets are the soft
+report-derived pseudo-labels in labels.csv; the loss is soft-target BCE and the
+label set is the ceiling on what the images can be taught.
+
+Architecture: per-slice 2.5D encoder -> attention pool over slices -> per-series
+embedding + bucket embedding -> masked attention pool over series -> 12 logits.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import math
+import random
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+import numpy as np
+import timm
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from sklearn.metrics import roc_auc_score
+from torch.utils.data import DataLoader, Dataset
+
+ROOT = Path(__file__).resolve().parent.parent
+
+COLS = ["ACL", "MCL", "Medial Meniscus", "Lateral Meniscus", "Medial OA", "Lateral OA",
+        "PF OA", "Effusion", "Synovitis", "Baker's", "Contusion", "Fracture"]
+
+# Sagittal fluid-sensitive, coronal fluid-sensitive, axial fluid-sensitive: the three
+# highest-coverage buckets, and between them they cover all twelve findings.
+# sag_nf / cor_nf add cartilage detail; enable once the 3-bucket baseline submits.
+DEFAULT_BUCKETS = ["sag_fs", "cor_fs", "axi_fs"]
+
+
+def seed_all(s: int) -> None:
+    random.seed(s), np.random.seed(s), torch.manual_seed(s)
+    torch.cuda.manual_seed_all(s)
+
+
+# ---------------------------------------------------------------- data
+
+class StudyDataset(Dataset):
+    def __init__(self, studies, series_by_study, targets, cache, buckets, depth, size, train,
+                 weights=None):
+        self.studies = studies
+        self.series = series_by_study
+        self.targets = targets
+        self.weights = weights or {}
+        self.cache = Path(cache)
+        self.buckets = buckets
+        self.depth = depth
+        self.size = size
+        self.train = train
+
+    def __len__(self):
+        return len(self.studies)
+
+    def _load(self, uid, bucket):
+        sid = self.series.get(uid, {}).get(bucket)
+        if sid is None:
+            return np.zeros((self.depth, self.size, self.size), np.uint8), 0.0
+        dirs = [self.cache, *getattr(self, "volume_dirs", [])]
+        v = None
+        for d in dirs:
+            npy = Path(d) / f"{sid}.npy"
+            npz = Path(d) / f"{sid}.npz"
+            try:
+                if npy.exists():
+                    v = np.load(npy)
+                elif npz.exists():
+                    z = np.load(npz)
+                    v = z["data"] if "data" in z.files else z[z.files[0]]
+            except Exception:
+                v = None
+            if v is not None:
+                break
+        if v is None:
+            return np.zeros((self.depth, self.size, self.size), np.uint8), 0.0
+        if v.shape[-2] != self.size or v.shape[-1] != self.size:
+            import cv2
+            v = np.stack([cv2.resize(s, (self.size, self.size), interpolation=cv2.INTER_AREA) for s in v])
+        if v.shape[0] != self.depth:
+            idx = np.linspace(0, v.shape[0] - 1, self.depth).round().astype(int)
+            v = v[idx]
+        return np.asarray(v, np.uint8), 1.0
+
+    def _augment(self, v):
+        import cv2
+        d, h, w = v.shape
+        ang = random.uniform(-12, 12)
+        sc = random.uniform(0.88, 1.12)
+        tx, ty = random.uniform(-.06, .06) * w, random.uniform(-.06, .06) * h
+        M = cv2.getRotationMatrix2D((w / 2, h / 2), ang, sc)
+        M[0, 2] += tx
+        M[1, 2] += ty
+        v = np.stack([cv2.warpAffine(s, M, (w, h), borderMode=cv2.BORDER_CONSTANT) for s in v])
+        if random.random() < 0.5:                       # slice dropout
+            k = random.randrange(1, max(2, d // 6))
+            v[np.random.choice(d, k, replace=False)] = 0
+        return v
+
+    def __getitem__(self, i):
+        uid = self.studies[i]
+        vols, mask = [], []
+        for b in self.buckets:
+            v, m = self._load(uid, b)
+            if self.train and m:
+                v = self._augment(v)
+            vols.append(v)
+            mask.append(m)
+        x = torch.from_numpy(np.stack(vols)).float().div_(255.0)    # (S, D, H, W)
+        if self.train:
+            x = x.mul_(random.uniform(0.85, 1.15)).add_(random.uniform(-.08, .08)).clamp_(0, 1)
+        y = torch.tensor(self.targets[uid], dtype=torch.float32)
+        # per-cell loss weight: observed 1.0, report-silent 0.3, silent+image 0.6 (board.py)
+        w = torch.tensor(self.weights.get(uid, [1.0] * len(COLS)), dtype=torch.float32)
+        return x, torch.tensor(mask, dtype=torch.float32), y, w
+
+
+# ---------------------------------------------------------------- model
+
+class AttnPool(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.score = nn.Sequential(nn.Linear(dim, dim // 4), nn.Tanh(), nn.Linear(dim // 4, 1))
+
+    def forward(self, x, mask=None):                     # x (B, N, F)
+        a = self.score(x).squeeze(-1)
+        if mask is not None:
+            alive = mask >= 0.5
+            a = a.masked_fill(~alive, float("-inf"))
+            a = torch.where(alive.any(-1, keepdim=True), a, torch.zeros_like(a))
+        a = a.softmax(-1).unsqueeze(-1)
+        a = torch.nan_to_num(a, nan=0.0)
+        return (x * a).sum(1)
+
+
+class KneeNet(nn.Module):
+    def __init__(self, name, n_buckets, n_out=12, pretrained=True, drop=0.3):
+        super().__init__()
+        self.encoder = timm.create_model(name, pretrained=pretrained, in_chans=3, num_classes=0)
+        f = self.encoder.num_features
+        self.slice_pool = AttnPool(f)
+        self.bucket_emb = nn.Embedding(n_buckets, f)
+        self.series_pool = AttnPool(f)
+        self.head = nn.Sequential(nn.Dropout(drop), nn.Linear(f, n_out))
+
+    def forward(self, x, mask):                          # x (B, S, D, H, W)
+        B, S, D, H, W = x.shape
+        # 2.5D: each slice sees its neighbours as RGB channels (edges replicate).
+        v = x.reshape(B * S, D, H, W)
+        i = torch.arange(D, device=x.device)
+        tri = torch.stack([v[:, (i - 1).clamp(0, D - 1)], v[:, i],
+                           v[:, (i + 1).clamp(0, D - 1)]], 2)         # (B*S, D, 3, H, W)
+        feat = self.encoder(tri.reshape(B * S * D, 3, H, W)).reshape(B * S, D, -1)
+        feat = self.slice_pool(feat).reshape(B, S, -1)
+        feat = feat + self.bucket_emb.weight.unsqueeze(0)
+        return self.head(self.series_pool(feat, mask))
+
+
+# ---------------------------------------------------------------- folds
+
+def make_folds(studies, Y, n_splits, seed):
+    try:
+        from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
+        kf = MultilabelStratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+        return list(kf.split(np.zeros(len(studies)), (Y >= 0.5).astype(int)))
+    except ImportError:
+        print("iterative-stratification not installed; falling back to stratifying on "
+              "positive count (`pip install iterative-stratification` for proper folds)")
+        from sklearn.model_selection import StratifiedKFold
+        strat = (Y >= 0.5).sum(1).clip(0, 6)
+        return list(StratifiedKFold(n_splits, shuffle=True, random_state=seed).split(studies, strat))
+
+
+def macro_auc(y_true, y_pred):
+    per = {}
+    for i, c in enumerate(COLS):
+        t = y_true[:, i]
+        s = y_pred[:, i]
+        per[c] = float("nan") if len(np.unique(t)) < 2 or not np.isfinite(s).all() \
+            else roc_auc_score(t, s)
+    vals = [v for v in per.values() if not math.isnan(v)]
+    return (sum(vals) / len(vals) if vals else float("nan")), per
+
+
+# ---------------------------------------------------------------- main
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--cache", required=True, help="dir of <series>.npy/.npz + manifest_train.csv")
+    ap.add_argument("--volumes", default="",
+                    help="extra dirs of <series>.npz (comma-separated), used when cache is write-only working dir")
+    ap.add_argument("--series-csv", default="",
+                    help="train_series.csv; used to build a manifest when cache has none")
+    ap.add_argument("--labels", default=str(ROOT / "data" / "labels.csv"))
+    ap.add_argument("--weights", default=str(ROOT / "data" / "label_weights.csv"),
+                    help="per-cell loss weights from board.py; ignored if the file is absent")
+    ap.add_argument("--oof-csv", default="", help="write out-of-fold predictions here (for board.py image-queue)")
+    ap.add_argument("--gold", default=str(ROOT / "data" / "gold_58.csv"))
+    ap.add_argument("--buckets", default=",".join(DEFAULT_BUCKETS))
+    ap.add_argument("--model", default="tf_efficientnet_b0")
+    ap.add_argument("--size", type=int, default=224)
+    ap.add_argument("--depth", type=int, default=16)
+    ap.add_argument("--bs", type=int, default=4)
+    ap.add_argument("--accum", type=int, default=2)
+    ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--epochs", type=int, default=10)
+    ap.add_argument("--folds", type=int, default=5)
+    ap.add_argument("--fold", type=int, default=0)
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--workers", type=int, default=2)
+    ap.add_argument("--out", default="/kaggle/working")
+    args = ap.parse_args()
+
+    seed_all(args.seed)
+    buckets = args.buckets.split(",")
+    dev = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+    print(f"device={dev} buckets={buckets}")
+
+    # labels
+    lab = {r["StudyInstanceUID"]: [float(r[c]) for c in COLS]
+           for r in csv.DictReader(open(args.labels))}
+    wts = {}
+    if Path(args.weights).exists():
+        wts = {r["StudyInstanceUID"]: [float(r[c]) for c in COLS]
+               for r in csv.DictReader(open(args.weights))}
+        print(f"loss weights from {args.weights}")
+    # gold: hard labels, held out of training, the only human-grade ruler
+    gold = {r["StudyInstanceUID"]: [int(r[c]) for c in COLS]
+            for r in csv.DictReader(open(args.gold))}
+
+    # best series per bucket = most slices
+    best = defaultdict(dict)
+    nslices = defaultdict(dict)
+    man = Path(args.cache) / "manifest_train.csv"
+    if not man.exists() and args.series_csv:
+        man = Path(args.series_csv)
+        print(f"no manifest_train.csv; building buckets from {man}")
+        plane_key, fluid_key = "Anatomical_Plane", "Fluid_Sensitive"
+        for r in csv.DictReader(open(man)):
+            p = (r.get(plane_key) or "").strip().lower()[:3] or "unk"
+            b = f"{p}_{'fs' if str(r.get(fluid_key, '')).strip() == '1' else 'nf'}"
+            if b not in buckets:
+                continue
+            u, sid = r["StudyInstanceUID"], r["SeriesInstanceUID"]
+            n = int(r.get("n_slices") or 0)
+            if n > nslices[u].get(b, -1):
+                nslices[u][b] = n
+                best[u][b] = sid
+        # without n_slices, last-write still leaves one series per bucket; prefer any hit
+        if not any(nslices[u] for u in nslices):
+            best.clear()
+            for r in csv.DictReader(open(man)):
+                p = (r.get(plane_key) or "").strip().lower()[:3] or "unk"
+                b = f"{p}_{'fs' if str(r.get(fluid_key, '')).strip() == '1' else 'nf'}"
+                if b not in buckets:
+                    continue
+                best[r["StudyInstanceUID"]][b] = r["SeriesInstanceUID"]
+    else:
+        for r in csv.DictReader(open(man)):
+            if r.get("ok", "1") != "1" or r["bucket"] not in buckets:
+                continue
+            u, b, n = r["StudyInstanceUID"], r["bucket"], int(r["n_slices"])
+            if n > nslices[u].get(b, -1):
+                nslices[u][b] = n
+                best[u][b] = r["SeriesInstanceUID"]
+
+    all_studies = sorted(u for u in lab if u in best)
+    print(f"{len(all_studies)} studies with labels and cached pixels "
+          f"({len(lab)} labelled, {len(best)} cached)")
+
+    train_pool = [u for u in all_studies if u not in gold]
+    gold_pool = [u for u in all_studies if u in gold]
+    Y = np.array([lab[u] for u in train_pool], dtype=np.float32)
+    tr_idx, va_idx = make_folds(train_pool, Y, args.folds, args.seed)[args.fold]
+    tr = [train_pool[i] for i in tr_idx]
+    va = [train_pool[i] for i in va_idx]
+    print(f"fold {args.fold}: train={len(tr)} val={len(va)} gold_holdout={len(gold_pool)}")
+
+    def mk(s, t):
+        ds = StudyDataset(s, best, lab, args.cache, buckets, args.depth, args.size, t, wts)
+        extra = [p for p in args.volumes.split(",") if p.strip()]
+        ds.volume_dirs = [Path(p.strip()) for p in extra]
+        return ds
+    dl_tr = DataLoader(mk(tr, True), batch_size=args.bs, shuffle=True, drop_last=True,
+                       num_workers=args.workers, pin_memory=True)
+    dl_va = DataLoader(mk(va, False), batch_size=args.bs, num_workers=args.workers)
+    dl_go = DataLoader(mk(gold_pool, False), batch_size=args.bs, num_workers=args.workers) \
+        if gold_pool else None
+
+    model = KneeNet(args.model, len(buckets)).to(dev)
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
+    steps = max(1, len(dl_tr) // args.accum) * args.epochs
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, args.lr, total_steps=steps, pct_start=0.1)
+    scaler = torch.amp.GradScaler(enabled=(dev == "cuda"))
+
+    @torch.no_grad()
+    def predict(dl):
+        model.eval()
+        P = []
+        for x, m, _, _ in dl:
+            with torch.autocast(dev, enabled=(dev == "cuda")):
+                P.append(model(x.to(dev), m.to(dev)).float().sigmoid().cpu())
+        return torch.cat(P).numpy()
+
+    best_auc, out_dir = -1.0, Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for ep in range(args.epochs):
+        model.train()
+        tot = n = 0
+        opt.zero_grad(set_to_none=True)
+        for i, (x, m, y, w) in enumerate(dl_tr):
+            with torch.autocast(dev, enabled=(dev == "cuda")):
+                # soft-target BCE, weighted per cell: silent cells hint, observed cells teach
+                w = w.to(dev)
+                per = F.binary_cross_entropy_with_logits(model(x.to(dev), m.to(dev)), y.to(dev),
+                                                         reduction="none")
+                loss = (per * w).sum() / w.sum().clamp_min(1e-6)
+            scaler.scale(loss / args.accum).backward()
+            if (i + 1) % args.accum == 0:
+                scaler.step(opt), scaler.update()
+                opt.zero_grad(set_to_none=True)
+                if sched.last_epoch < steps - 1:
+                    sched.step()
+            tot += loss.item() * len(y)
+            n += len(y)
+
+        pv = predict(dl_va)
+        yv = (np.array([lab[u] for u in va], np.float32) >= 0.5).astype(int)
+        auc, per = macro_auc(yv, pv)
+        line = f"ep{ep + 1:>2} loss={tot / max(n,1):.4f} val_macroAUC={auc:.4f}"
+        if dl_go is not None:
+            g_auc, _ = macro_auc(np.array([gold[u] for u in gold_pool]), predict(dl_go))
+            line += f" gold58={g_auc:.4f}"
+        print(line, flush=True)
+
+        if auc > best_auc:
+            best_auc = auc
+            torch.save({"model": model.state_dict(), "args": vars(args), "auc": auc},
+                       out_dir / f"fold{args.fold}.pt")
+            np.save(out_dir / f"oof_fold{args.fold}.npy", pv)
+            if args.oof_csv:
+                with open(args.oof_csv, "w", newline="") as fh:
+                    wr = csv.writer(fh)
+                    wr.writerow(["StudyInstanceUID"] + COLS)
+                    for u, row in zip(va, pv):
+                        wr.writerow([u] + [f"{float(v):.5f}" for v in row])
+
+    print(f"\nbest val macro AUC {best_auc:.4f}  -> {out_dir}/fold{args.fold}.pt")
+    for c, v in per.items():
+        print(f"  {c:18} {v:.4f}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

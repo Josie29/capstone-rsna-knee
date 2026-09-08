@@ -1,0 +1,46 @@
+[{"stream_name":"stderr","time":6.569779137,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":6.569851402,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":6.569856828,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":6.56986081,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":7.162359347,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":7.162387227,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":7.162392194,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":7.162396077,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":12.703100166,"data":"input tree (top 2 levels):\n"}
+,{"stream_name":"stdout","time":12.703191185,"data":"  competitions -\u003e ['rsna-knee-abnormality-detection']\n"}
+,{"stream_name":"stdout","time":12.703197223,"data":"  knee-cnn-v3a -\u003e ['__huggingface_repos__.json', '__notebook__.ipynb', '__output__.json', '__results__.html', 'buckets.json', 'custom.css', 'fold0.pt', 'fold1.pt']\n"}
+,{"stream_name":"stdout","time":12.703200989,"data":"  knee-cnn-v3b -\u003e ['__huggingface_repos__.json', '__notebook__.ipynb', '__output__.json', '__results__.html', 'buckets.json', 'custom.css', 'fold3.pt', 'fold4.pt']\n"}
+,{"stream_name":"stdout","time":13.085984572,"data":"device: cuda | cpus: 4\n"}
+,{"stream_name":"stdout","time":286.960384081,"data":"fold checkpoints:\n"}
+,{"stream_name":"stdout","time":286.960423813,"data":"  fold0: /kaggle/input/knee-cnn-v3a/fold0.pt\n"}
+,{"stream_name":"stdout","time":286.960429048,"data":"  fold1: /kaggle/input/knee-cnn-v3a/fold1.pt\n"}
+,{"stream_name":"stdout","time":286.960433,"data":"  fold2: /kaggle/input/knee-cnn-v3a/fold2.pt\n"}
+,{"stream_name":"stdout","time":286.960458242,"data":"  fold3: /kaggle/input/knee-cnn-v3b/fold3.pt\n"}
+,{"stream_name":"stdout","time":286.960463961,"data":"  fold4: /kaggle/input/knee-cnn-v3b/fold4.pt\n"}
+,{"stream_name":"stdout","time":409.321106814,"data":"COMP /kaggle/input/competitions/rsna-knee-abnormality-detection \n"}
+,{"stream_name":"stdout","time":409.3211472,"data":"TRAINPY /kaggle/input/knee-cnn-v3a/train.py \n"}
+,{"stream_name":"stdout","time":409.321153305,"data":"IMAGES /kaggle/input/competitions/rsna-knee-abnormality-detection/test_series\n"}
+,{"stream_name":"stdout","time":409.321163852,"data":"3 test studies, 15 series listed\n"}
+,{"stream_name":"stdout","time":410.453198376,"data":"12 (study,bucket) decode jobs over 14 candidate series\n"}
+,{"stream_name":"stdout","time":414.936352333,"data":"DICOM decode: 4.8s for 12 jobs (0 bucket failures)\n"}
+,{"stream_name":"stdout","time":429.108831071,"data":"loaded 5 folds on cuda\n"}
+,{"stream_name":"stdout","time":429.108872772,"data":"3 studies with pixels, 0 falling back to prevalence\n"}
+,{"stream_name":"stdout","time":435.358049534,"data":"  3/3  elapsed 6s\n"}
+,{"stream_name":"stdout","time":435.359222149,"data":"inference: 6.5s for 3 studies on cuda\n"}
+,{"stream_name":"stdout","time":435.400644592,"data":"submission.csv OK: 3 rows\n"}
+,{"stream_name":"stdout","time":435.400665667,"data":"per-column mean: {'ACL': np.float64(0.058), 'MCL': np.float64(0.0492), 'Medial Meniscus': np.float64(0.1969), 'Lateral Meniscus': np.float64(0.0806), 'Medial OA': np.float64(0.3159), 'Lateral OA': np.float64(0.2217), 'PF OA': np.float64(0.4475), 'Effusion': np.float64(0.193), 'Synovitis': np.float64(0.3508), \"Baker's\": np.float64(0.16), 'Contusion': np.float64(0.1469), 'Fracture': np.float64(0.1708)}\n"}
+,{"stream_name":"stdout","time":435.400687325,"data":"per-column std : {'ACL': np.float64(0.0615), 'MCL': np.float64(0.0163), 'Medial Meniscus': np.float64(0.0322), 'Lateral Meniscus': np.float64(0.0386), 'Medial OA': np.float64(0.0393), 'Lateral OA': np.float64(0.0723), 'PF OA': np.float64(0.0485), 'Effusion': np.float64(0.0744), 'Synovitis': np.float64(0.0593), \"Baker's\": np.float64(0.0926), 'Contusion': np.float64(0.0718), 'Fracture': np.float64(0.145)}\n"}
+,{"stream_name":"stdout","time":435.400693568,"data":"timings: decode=5s infer=6s device=cuda\n"}
+,{"stream_name":"stdout","time":435.400697556,"data":"                                                StudyInstanceUID      ACL      MCL  Medial Meniscus  Lateral Meniscus  Medial OA  Lateral OA    PF OA  Effusion  Synovitis  Baker's  Contusion  Fracture\n"}
+,{"stream_name":"stdout","time":435.400701635,"data":"1.2.826.0.1.3680043.8.498.10047035057544427318018579121635276191 0.006533 0.040604         0.241824          0.026185   0.260353    0.123472 0.399659  0.193332   0.331466 0.290116   0.109482  0.067181\n"}
+,{"stream_name":"stdout","time":435.400705611,"data":"1.2.826.0.1.3680043.8.498.10062861783145312629332250977456991776 0.144519 0.072033         0.168007          0.105269   0.343950    0.295487 0.428924  0.283921   0.431180 0.081819   0.247372  0.375854\n"}
+,{"stream_name":"stdout","time":435.400709763,"data":"1.2.826.0.1.3680043.8.498.10067514707072572280263481548497591402 0.023000 0.034944         0.180907          0.110424   0.343290    0.246260 0.513977  0.101699   0.289741 0.108075   0.083970  0.069449\n"}
+,{"stream_name":"stderr","time":441.005146529,"data":"/usr/local/lib/python3.12/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":441.00518154,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":441.175067719,"data":"/usr/local/lib/python3.12/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":441.17509271,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":441.874598077,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":442.187399997,"data":"[NbConvertApp] Writing 23401 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":444.713083992,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":445.575653345,"data":"[NbConvertApp] Writing 345553 bytes to __results__.html\n"}
+]
