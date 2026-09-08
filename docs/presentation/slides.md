@@ -19,6 +19,10 @@ they own the final content.
 - House rules: no leaderboard/prize-money references (say "hidden test set"); model
   builds are team work — individual names appear only as speaker labels; ~100 seconds
   per speaker; verify rendering by opening `deck.html` in a browser before pushing.
+- Q&A depth: don't cram technical detail into your timed slides — add an appendix slide
+  instead and reference it if a question comes up. In `deck.html`, copy an appendix
+  `<section>` block (they carry `data-appendix`) after A1; appendix slides sit outside
+  the timed 5 minutes and number themselves A2, A3, ...
 - Read "Iteration notes" at the bottom before restructuring — it records the standing
   design decisions.
 
@@ -116,6 +120,8 @@ labels. Kelly."
 
 Placeholder — Kelly to write. Josie's handoff into this slide is "+0.081 came from the
 labels", so it should open on the label problem (only 58 of 4,407 studies labeled).
+Technical depth (mining prompts, validation method, ...) can go to an appendix slide
+for Q&A — see the editing guide.
 
 - The label problem: [KELLY]
 - How the labels were mined: [KELLY]
@@ -136,7 +142,8 @@ Placeholder — Kelly to write; ends her segment, hands off to Ryan.
 
 ## Slide 6 — RYAN-TODO: The Harness (~50s)
 
-Placeholder from one-line description — Ryan to replace:
+Placeholder from one-line description — Ryan to replace. Technical depth (stack,
+tool-calling design, ...) can go to an appendix slide for Q&A — see the editing guide.
 
 - Productizing the model for a clinician: an AI harness where a doctor's LLM assistant can call the imaging model to help make diagnoses
 - What it does: [model probabilities + per-finding attention overlays exposed as tools the LLM can invoke?]
