@@ -130,7 +130,8 @@ radiologists' reports that ship with every exam.
   quote that is mechanically verified; one deterministic function turns readings into
   probabilities — same report, same label
 - Visual: three-block strip (measured on the 58 gold exams) — **denied ≈ 0.00** ·
-  **silent 0.07–0.50** · **asserted 0.41–0.79**
+  **silent 0.07–0.50** · **asserted 0.41–0.79** (the asserted band is the measured
+  truth-rate; the assigned label scales with stated severity & certainty, up to ~0.9)
 - The trap: **silence is not absence.** A denial is an observation; silence is a missing
   observation, and findings a report never mentions are present up to half the time.
   ~⅓ of training cells are silent — scoring them 0 would poison the training set
