@@ -220,7 +220,18 @@ from the placeholder closing slide, and was dropped so slide 8 carries Ryan's co
 
 ---
 
-## Appendix A1 — ROC AUC, in one picture (backup — not in the 5 minutes)
+## Appendix A1 — Divider
+
+**Appendix**
+
+Backup material for Q&A — not part of the timed 5 minutes.
+
+- A2 — ROC AUC, the evaluation metric explained
+- (Kelly / Ryan: add technical-depth slides after, per the editing guide)
+
+---
+
+## Appendix A2 — ROC AUC, in one picture (backup — not in the 5 minutes)
 
 For Q&A on the metric. Visual: ROC curve plot — true-positive rate vs false-positive
 rate, chance diagonal, shaded area labeled AUC ≈ 0.89, one marked threshold point.
