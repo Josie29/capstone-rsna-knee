@@ -121,6 +121,39 @@
   .arch .node:last-child::after { content: none; }
   @media (max-width: 56rem) { .arch .node::after { content: none; } }
 
+  /* slides 6-7: a screenshot mounted beside a statement. The quoted paper is white to
+     its own edges and the reviewer UI is near-black to its own edges; both get the same
+     frame, radius and lift so they read as one kind of object on the deck's ground. */
+  .shot-cols { display: grid; grid-template-columns: minmax(0, 7fr) minmax(13rem, 3.2fr);
+               gap: clamp(1.5rem, 3.5vw, 3rem); align-items: center; margin-top: var(--s4); }
+  @media (max-width: 56rem) { .shot-cols { grid-template-columns: 1fr; } }
+  .shot { margin: 0; padding: var(--s3); border: 1px solid var(--hairline); border-radius: 10px;
+          background: var(--panel); box-shadow: 0 2px 28px rgb(0 0 0 / 0.4); }
+  .shot img { display: block; width: 100%; height: auto; border-radius: 5px; }
+  .shot.paper { background: #FFFFFF; }              /* seams into the paper's own white */
+  .shot.viewport { background: var(--panel-2); }    /* lifts the near-black UI off the ground */
+
+  .statement { font-size: clamp(1.3rem, 2.5vw, 2rem); font-weight: 700; line-height: 1.25;
+               letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  .statement + .statement { margin-top: var(--s8); }
+
+  ol.numbered { margin: 0; padding: 0; list-style: none;
+                font-size: clamp(0.98rem, 1.6vw, 1.25rem); }
+  ol.numbered li { margin-bottom: var(--s6); line-height: 1.35; }
+  ol.numbered li:last-child { margin-bottom: 0; }
+  ol.numbered .n { font-family: var(--mono); color: var(--teal-text); margin-right: 0.4em; }
+  ol.numbered u { text-decoration-color: var(--teal-text); text-decoration-thickness: 2px;
+                  text-underline-offset: 0.22em; }
+
+  /* slide 8: `name :: detail` capability lines, then the closing claim */
+  ul.points li .dd { display: block; margin-top: 0.2rem; font-family: var(--mono);
+                     font-size: 0.8em; color: var(--ink-2); }
+  h2.wide { max-width: 42ch; margin-bottom: var(--s4); }
+  .close { display: flex; align-items: center; gap: var(--s4); margin-top: var(--s6); }
+  .close svg { flex: none; width: clamp(1.8rem, 3.2vw, 2.75rem); height: auto; fill: var(--teal); }
+  .close p { margin: 0; font-size: clamp(1.15rem, 2.2vw, 1.75rem); font-weight: 700;
+             line-height: 1.2; letter-spacing: -0.01em; text-wrap: balance; }
+
   .tbd { display: inline-block; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
          color: var(--amber-text); border: 1px solid color-mix(in oklab, var(--amber) 55%, transparent);
          border-radius: 999px; padding: 0.1rem 0.6rem; margin-left: var(--s2); vertical-align: middle; }
@@ -515,34 +548,66 @@
        exams — the ceiling line on the results chart &#183; gold never trains, it only grades</p>
   </section>
 
-  <!-- 6 · The Harness — Ryan, ~50s · RYAN-TODO -->
+  <!-- 6 · Early wins — Ryan, ~33s -->
   <section class="slide" data-speaker="Ryan · Harness">
-    <p class="eyebrow">The harness <span class="tbd">Ryan · placeholder</span></p>
-    <h2>Putting the model in a clinician's workflow</h2>
-    <ul class="points">
-      <li>Productizing the model for a clinician: an AI harness where a doctor's LLM
-          assistant can <strong>call the imaging model</strong> to help make diagnoses</li>
-      <li class="dim">What it does: [model probabilities + per-finding attention overlays
-          exposed as tools the LLM can invoke]</li>
-      <li class="dim">Stack / architecture: [RYAN]</li>
-    </ul>
+    <p class="eyebrow">The harness</p>
+    <h2>Early wins for AI-augmented systems</h2>
+    <div class="shot-cols">
+      <figure class="shot paper">
+        <img src="assets/early-wins-breast-screening.webp"
+             alt="A Nature Cancer paper on the diagnostic accuracy, fairness and clinical
+                  implementation of AI for breast cancer screening: a multicentre study of a
+                  mammography AI across 115,973 mammograms from five screening services, which
+                  reported higher sensitivity than the first reader and a cancer detection rate
+                  rising from 7.54 to 9.33 per 1,000 women.">
+      </figure>
+      <div>
+        <p class="statement">Single diagnosis</p>
+        <p class="statement">Rapidly identifiable symptoms</p>
+      </div>
+    </div>
   </section>
 
-  <!-- 7 · Demo + Why This Matters — Ryan, ~50s · RYAN-TODO -->
+  <!-- 7 · The frontier — Ryan, ~33s -->
   <section class="slide" data-speaker="Ryan · Harness">
-    <p class="eyebrow">Demo &amp; why this matters <span class="tbd">Ryan · placeholder</span></p>
-    <h2>Radiologist time is the scarcest input in medical AI</h2>
+    <p class="eyebrow">The harness &middot; the frontier</p>
+    <h2>Now the frontier looks more&hellip;</h2>
+    <div class="shot-cols">
+      <figure class="shot viewport">
+        <img src="assets/frontier-review-ui.webp"
+             alt="The review harness: three linked knee-MRI viewports — sagittal, coronal and
+                  axial — with an attention overlay lit for the marrow group, beside a findings
+                  panel listing each finding with its probability, threshold state and
+                  accept/reject controls, and tabs for the sources that scored the study.">
+      </figure>
+      <ol class="numbered">
+        <li><span class="n">1.</span>Broad: multiple, simultaneous diagnoses</li>
+        <li><span class="n">2.</span>Complex: disentangling injuries that often concur</li>
+        <li><span class="n">3.</span>Ambiguous: final diagnoses where often
+            <u>panels of doctors disagree</u> on full scope of injury</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 8 · What we are building + close — Ryan, ~33s -->
+  <section class="slide" data-speaker="Ryan · Harness">
+    <p class="eyebrow">The harness &middot; why this matters</p>
+    <h2 class="wide">Radiologists are fundamentally accountable.<br>
+        Let&rsquo;s give them the best thought partner to resolve the trickiest cases.</h2>
     <ul class="points">
-      <li class="dim">Demo: [doctor asks a question &rarr; LLM pulls model findings +
-          attention overlay for a study]</li>
-      <li>Hospitals already hold millions of studies <strong>with reports attached</strong> —
-          weak supervision from reports is how those archives get unlocked</li>
-      <li>Our numbers make it concrete: 0.691 to 0.887
-          <strong>without one new expert annotation</strong></li>
-      <li>The recipe generalizes: mine reports &rarr; train an imaging model &rarr; put it
-          in a clinician's workflow — chest X-ray, CT, pathology</li>
+      <li>DICOM processing pipeline
+          <span class="dd">:: Slice ordering, standard cropping, instance manifest</span></li>
+      <li>MSK reasoning skills
+          <span class="dd">:: area tracing, diagnosis thresholds, response schema</span></li>
+      <li>Judgement panels: MMLMs + ViT
+          <span class="dd">:: See scans through multiple architectures</span></li>
+      <li>Ambiguity resolution focused platform
+          <span class="dd">:: Takes radiologists to the most difficult to resolve questions</span></li>
     </ul>
-    <p class="footer-note">Final submission deadline · 2026-10-22 · 0.887 public score and climbing</p>
+    <div class="close">
+      <svg viewBox="0 0 96 96" aria-hidden="true"><path d="M7.055 51.027 81.814 51.027 72.919 59.922C71.7592 61.0818 71.7592 62.9622 72.919 64.122 74.0788 65.2818 75.9592 65.2818 77.119 64.122L91.109 50.128C92.2688 49.0234 92.3136 47.1878 91.209 46.028 91.1765 45.9939 91.1431 45.9605 91.109 45.928L77.116 31.938C76.0114 30.7782 74.1758 30.7334 73.016 31.838 72.9819 31.8705 72.9485 31.9039 72.916 31.938 71.7562 33.0426 71.7114 34.8782 72.816 36.038 72.8485 36.0721 72.8819 36.1055 72.916 36.138L81.811 45.038 7.055 45.038C5.39815 45.038 4.055 46.3811 4.055 48.038 4.055 49.6949 5.39815 51.038 7.055 51.038Z"/></svg>
+      <p>Faster, more accurate diagnoses with less cognitive load.</p>
+    </div>
   </section>
 
   <!-- A1 · Appendix: ROC AUC explainer — backup for Q&A, not in the timed 5 minutes -->
@@ -665,6 +730,9 @@
       setStep(Math.min(3, parseInt(demo.getAttribute("data-step"), 10) + 1));
     });
     reset.addEventListener("click", () => { setStep(0); });
-    setStep(0);
+    // ?step=N presets the demo state — used by scripts/export_deck_pptx.py to
+    // capture each demo step headlessly; harmless when absent.
+    const preset = parseInt(new URLSearchParams(location.search).get("step") ?? "0", 10);
+    setStep(Number.isFinite(preset) ? Math.max(0, Math.min(3, preset)) : 0);
   })();
 </script>
