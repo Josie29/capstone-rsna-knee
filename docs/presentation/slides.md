@@ -57,13 +57,14 @@ storytelling, not peer review):
 
 - E001 0.691 → E002 0.692 → E003 0.773 → E004 0.773 → E005 0.786 → E008 0.785 →
   E009 0.789 → E011 0.868 → **E012 0.887 — highlighted as the best, ring + hot label**
-- Reference lines: 0.80 submission bar; 0.887 label ceiling (miner vs gold — Kelly setup;
-  the E012 point lands exactly on it, a coincidence worth a spoken beat)
+- Reference line: 0.887 label ceiling (miner vs gold — Kelly setup; the E012 point lands
+  exactly on it, a coincidence worth a spoken beat)
+- Chart caption: "macro AUC · scored on the ~1,300-study hidden test set"
 - Crashed experiments (E006/E007) and the E010 null are omitted from the slide — the ID
   gaps stay visible on the x-axis; full history in `docs/experiments.md`
 
-Table — one row per experiment, Data and Model columns to show which lever each pulled
-("—" = unchanged from the row above), E012 highlighted:
+Table — one row per experiment, Data and Model columns to show which lever each pulled,
+E012 highlighted. Footnote under the table: "— = held constant from the row above":
 
 | ID | data | model | AUC |
 |---|---|---|---|
