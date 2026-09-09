@@ -36,7 +36,7 @@ Weakly-supervised knee-MRI abnormality detection
 
 - **0.887 macro AUC on the hidden test set** — trained with 58 ground-truth labels and 4,349 we mined from the radiologists' own reports
 - RSNA Knee Abnormality Detection (Kaggle, 2026)
-- Gauntlet AI Capstone — Josie Machalek · Kelly · Ryan
+- Gauntlet AI Capstone — Josie Machalek · Kelly He · Ryan Highfill
 
 Stat tiles: 0.887 test-set AUC (hot) · 570 GB of image data · 1.3% of studies labeled
 
