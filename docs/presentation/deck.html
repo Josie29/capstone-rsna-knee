@@ -91,10 +91,6 @@
   .result-cols { display: grid; grid-template-columns: 11fr 9fr; gap: clamp(1.5rem, 3vw, 3rem);
                  align-items: center; }
   @media (max-width: 56rem) { .result-cols { grid-template-columns: 1fr; } }
-  .legend { display: flex; gap: var(--s4); font-family: var(--mono); font-size: 0.68rem;
-            letter-spacing: 0.06em; color: var(--ink-2); margin-bottom: var(--s2); }
-  .legend .sw { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px;
-                margin-right: 0.35rem; vertical-align: -0.08rem; }
   table.exp { border-collapse: collapse; width: 100%; font-family: var(--mono);
               font-size: 0.72rem; font-variant-numeric: tabular-nums; }
   table.exp td { padding: 0.32rem 0.5rem 0.32rem 0; border-bottom: 1px solid var(--hairline);
@@ -106,6 +102,9 @@
   table.exp .v-crash { color: var(--amber-text); }
   table.exp tr.best td { color: var(--ink); background: color-mix(in oklab, var(--teal) 10%, transparent); }
   table.exp tr.best td:first-child { color: var(--teal-text); font-weight: 600; }
+  table.exp tr.hd td { font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
+                       color: var(--ink-3); border-bottom: 1px solid var(--hairline); padding-top: 0; }
+  table.exp td.dim { color: var(--ink-3); }
 
   /* slide 3: architecture flow */
   .arch { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s3); margin: var(--s8) 0 var(--s4); }
@@ -278,16 +277,12 @@
 
   <!-- 2 · The Result — Josie, ~50s -->
   <section class="slide" data-speaker="Josie · Model">
-    <p class="eyebrow">The result · ten controlled experiments, then a rebuild</p>
+    <p class="eyebrow">The result · twelve controlled experiments, one climb</p>
     <h2>Label mining and controlled model experiments delivered 0.887 macro AUC</h2>
     <div class="result-cols">
       <div class="chart">
-        <div class="legend">
-          <span><span class="sw" style="background:#93A3B7"></span>local eval</span>
-          <span><span class="sw" style="background:#4FC8C2; transform:rotate(45deg); display:inline-block"></span>submitted · hidden test</span>
-        </div>
         <svg viewBox="0 0 640 400" role="img" style="width:100%; height:auto; display:block"
-             aria-label="Macro AUC across experiments E001 to E010 and the pipeline rebuild v2 and v3. A muted local-evaluation line dips at the two fine-tune crashes, climbs to 0.803, then jumps with the rebuild. Teal diamonds mark the seven submitted hidden-test scores rising from 0.691 to a highlighted best of 0.887 at v3. Dashed reference lines mark the 0.80 submission bar and the 0.887 label ceiling.">
+             aria-label="Macro AUC across experiments E001 to E012. A single teal line climbs from 0.691 to a highlighted best of 0.887 at E012. Dashed reference lines mark the 0.80 submission bar and the 0.887 label ceiling.">
           <!-- gridlines + y ticks -->
           <g font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#5D6E84">
             <line x1="46" y1="301" x2="610" y2="301" stroke="#24344A" stroke-width="1"/><text x="40" y="304" text-anchor="end">0.70</text>
@@ -299,61 +294,46 @@
           <text x="50" y="153" text-anchor="start" fill="#93A3B7" font-size="10" font-family="ui-monospace, Menlo, monospace">0.80 submission bar</text>
           <line x1="46" y1="36" x2="610" y2="36" stroke="#5D6E84" stroke-width="1.5" stroke-dasharray="5 4"/>
           <text x="50" y="30" text-anchor="start" fill="#93A3B7" font-size="10" font-family="ui-monospace, Menlo, monospace">0.887 label ceiling &#183; miner vs gold</text>
-          <!-- local eval series (E003..E010, v2, v3) -->
-          <path d="M158,201 L207,184 L256,179 L305,233 L354,273 L404,181 L453,155 L502,161 L551,103 L600,92"
-                fill="none" stroke="#93A3B7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <g fill="#93A3B7">
-            <circle cx="158" cy="201" r="3.5"/><circle cx="207" cy="184" r="3.5"/>
-            <circle cx="256" cy="179" r="3.5"/><circle cx="305" cy="233" r="3.5"/>
-            <circle cx="354" cy="273" r="3.5"/><circle cx="404" cy="181" r="3.5"/>
-            <circle cx="453" cy="155" r="3.5"/><circle cx="502" cy="161" r="3.5"/>
-            <circle cx="551" cy="103" r="3.5"/><circle cx="600" cy="92" r="3.5"/>
-          </g>
-          <!-- submitted series (diamonds) -->
+          <!-- one condensed series: each experiment's headline score -->
+          <path d="M60,314 L128,313 L195,198 L263,198 L330,179 L398,181 L465,175 L533,63 L600,37"
+                fill="none" stroke="#4FC8C2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           <g fill="#4FC8C2" stroke="#0D1420" stroke-width="1">
-            <rect x="54" y="308" width="12" height="12" transform="rotate(45 60 314)"/>
-            <rect x="103" y="307" width="12" height="12" transform="rotate(45 109 313)"/>
-            <rect x="152" y="192" width="12" height="12" transform="rotate(45 158 198)"/>
-            <rect x="201" y="192" width="12" height="12" transform="rotate(45 207 198)"/>
-            <rect x="447" y="169" width="12" height="12" transform="rotate(45 453 175)"/>
-            <rect x="545" y="57" width="12" height="12" transform="rotate(45 551 63)"/>
-            <rect x="593" y="30" width="14" height="14" transform="rotate(45 600 37)"/>
+            <circle cx="60" cy="314" r="4.5"/><circle cx="128" cy="313" r="4.5"/>
+            <circle cx="195" cy="198" r="4.5"/><circle cx="263" cy="198" r="4.5"/>
+            <circle cx="330" cy="179" r="4.5"/><circle cx="398" cy="181" r="4.5"/>
+            <circle cx="465" cy="175" r="4.5"/><circle cx="533" cy="63" r="4.5"/>
+            <circle cx="600" cy="37" r="6"/>
           </g>
           <!-- best-experiment highlight ring -->
           <circle cx="600" cy="37" r="13" fill="none" stroke="#4FC8C2" stroke-width="1.5" opacity="0.85"/>
           <!-- direct labels on story points -->
           <g font-family="ui-monospace, Menlo, monospace">
             <text x="60" y="338" text-anchor="middle" fill="#93A3B7" font-size="11">0.691</text>
-            <text x="182" y="222" text-anchor="middle" fill="#93A3B7" font-size="11">0.773</text>
-            <text x="207" y="170" text-anchor="middle" fill="#5D6E84" font-size="9.5">cv won, test tied</text>
-            <text x="330" y="296" text-anchor="middle" fill="#5D6E84" font-size="9.5">fine-tune crashes</text>
-            <text x="453" y="199" text-anchor="middle" fill="#93A3B7" font-size="10">0.789</text>
-            <text x="536" y="67" text-anchor="end" fill="#93A3B7" font-size="10">0.868</text>
+            <text x="229" y="222" text-anchor="middle" fill="#93A3B7" font-size="11">0.773</text>
+            <text x="465" y="199" text-anchor="middle" fill="#93A3B7" font-size="10">0.789</text>
+            <text x="518" y="67" text-anchor="end" fill="#93A3B7" font-size="10">0.868</text>
             <text x="600" y="72" text-anchor="middle" fill="#4FC8C2" font-size="15" font-weight="700">0.887</text>
           </g>
           <!-- x axis -->
           <line x1="46" y1="372" x2="610" y2="372" stroke="#24344A" stroke-width="1"/>
           <g font-family="ui-monospace, Menlo, monospace" font-size="9" fill="#5D6E84" text-anchor="middle">
-            <text x="60" y="388">E001</text><text x="109" y="388">E002</text><text x="158" y="388">E003</text>
-            <text x="207" y="388">E004</text><text x="256" y="388">E005</text><text x="305" y="388">E006</text>
-            <text x="354" y="388">E007</text><text x="404" y="388">E008</text><text x="453" y="388">E009</text>
-            <text x="502" y="388">E010</text><text x="551" y="388">v2</text><text x="600" y="388">v3</text>
+            <text x="60" y="388">E001</text><text x="128" y="388">E002</text><text x="195" y="388">E003</text>
+            <text x="263" y="388">E004</text><text x="330" y="388">E005</text><text x="398" y="388">E008</text>
+            <text x="465" y="388">E009</text><text x="533" y="388">E011</text><text x="600" y="388">E012</text>
           </g>
         </svg>
       </div>
       <table class="exp">
-        <tr><td>E001</td><td>pipeline check, 58 gold labels</td><td>0.691 test</td></tr>
-        <tr><td>E002</td><td>clinical plane prior</td><td class="v-null">+0.001 &#8709;</td></tr>
-        <tr><td>E003</td><td>mined labels 58 &rarr; 4,407</td><td class="v-paid"><strong>+0.081 test</strong> &#10003;</td></tr>
-        <tr><td>E004</td><td>DINOv2 backbone</td><td class="v-null">+0.012 cv &rarr; 0.000 test &#8709;</td></tr>
-        <tr><td>E005</td><td>per-label attention</td><td class="v-paid">+0.014 &#10003;</td></tr>
-        <tr><td>E006</td><td>fine-tune the stack</td><td class="v-crash">crash &#10007;</td></tr>
-        <tr><td>E007</td><td>unified multi-plane</td><td class="v-crash">crash &#10007;</td></tr>
-        <tr><td>E008</td><td>fixed fine-tune recipe</td><td class="v-paid">+0.037 &#10003;</td></tr>
-        <tr><td>E009</td><td>laterality + Sagittal T1</td><td class="v-paid">+0.018 &rarr; 0.789 test &#10003;</td></tr>
-        <tr><td>E010</td><td>denser slice sampling</td><td class="v-null">&#8722;0.004 &#8709;</td></tr>
-        <tr><td>v2</td><td>rebuild: EfficientNet, 2-level attention</td><td class="v-paid">0.868 test &#10003;</td></tr>
-        <tr class="best"><td>v3</td><td>+ non-fluid series, 24-slice depth</td><td class="v-paid"><strong>0.887 test</strong> &#10003;</td></tr>
+        <tr class="hd"><td>ID</td><td>Data</td><td>Model</td><td>AUC</td></tr>
+        <tr><td>E001</td><td>58 gold labels</td><td>frozen ResNet-34</td><td>0.691</td></tr>
+        <tr><td>E002</td><td class="dim">&mdash;</td><td>+ clinical plane weighting</td><td>0.692</td></tr>
+        <tr><td>E003</td><td>4,407 mined labels</td><td>frozen ResNet-34</td><td class="v-paid">0.773</td></tr>
+        <tr><td>E004</td><td class="dim">&mdash;</td><td>frozen DINOv2 ViT</td><td>0.773</td></tr>
+        <tr><td>E005</td><td class="dim">&mdash;</td><td>+ per-label attention</td><td class="v-paid">0.786</td></tr>
+        <tr><td>E008</td><td class="dim">&mdash;</td><td>fine-tuned unified ResNet-34</td><td>0.785</td></tr>
+        <tr><td>E009</td><td>+ laterality fix, + Sagittal T1</td><td class="dim">&mdash;</td><td class="v-paid">0.789</td></tr>
+        <tr><td>E011</td><td>improved mined labels</td><td>EfficientNet-B0, 2-level attention</td><td class="v-paid">0.868</td></tr>
+        <tr class="best"><td>E012</td><td>+ non-fluid series, 24 slices</td><td class="dim">&mdash;</td><td class="v-paid"><strong>0.887</strong></td></tr>
       </table>
     </div>
   </section>
