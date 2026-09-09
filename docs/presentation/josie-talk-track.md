@@ -1,29 +1,36 @@
 # Josie — talk-track crib sheet
 
-Speaker notes only — not rendered in the deck. Slide-by-slide scripts plus Q&A
-soundbites, one rehearsal page. Timings target ~100s total for slides 1–3.
 
 ## Slide scripts
 
-**Slide 1 (~10s):** "Three of us, one Kaggle competition: read a knee MRI, predict
-12 findings, with almost no labels. I'll cover the model, Kelly the labels, Ryan the
-product."
+**Slide 1 (~10s):
+- Our capstone project was training KneeNet, starting with knee MRI reports through training a harnessed model that provides diagnostic support
+- In the end, we achieved 0.887 Macro AUC from 570 GB of weakly labeled image data where only 1.3% of studies were labeled.
 
-**Slide 2 (~50s):** "Twelve experiments, every one a controlled A/B. Two aren't on this
-chart — spectacular fine-tune crashes, ask me in Q&A. Two lessons in the flat spots: a
-fancier DINOv2 backbone moved nothing, E004; and the fine-tune only paid once the recipe
-was fixed. The steps that mattered: mined labels, +0.081. Attention pooling. The
-laterality fix — knees are mirror images, half our data was anatomically backwards. Then
-the rebuild: EfficientNet with attention over slices then series, 0.868 — and non-fluid
-series with deeper sampling took it to 0.887."
+**Slide 2 (~50s):** 
+- It was a combination of label mining and controlled model experiments that delivered our best macro AUC of 0.887
+- Here on the left we see our performance over time/experiemnts ran and on the right side we see a table describing what data and model each experiemnt used to achieve its associated performance
+- We ran 12 total experiments, initially scoring just 0.691 on a simple frozen resnet 34 model trained on just the original 58 labeled studies
+  - then added both model complexity and data labeling complexity to achieve the additional ~0.20 higher performance
+- I'm going to talk about the modeling side first then kelly will get into the data labeling after
 
-**Slide 3 (~40s):** "Before any model: pick the right five series out of each study's
-pile of DICOMs, order the slices by scanner geometry, and resample everything to the
-same shape. Then one shared encoder reads every slice, and attention twice — each series
-pools its own slices, then the study pools its available series. Studies are ragged; the
-mask handles missing series."
+**Slide 3 (~40s):**
+- This diagram is our best model end to end, left to right — from a study's raw DICOMs
+  all the way to the 12 probabilities
+- Each study comes in as about 5 and a half series of DICOM slices; before any modeling
+  we select the best series for each of 5 series types, order the slices by the
+  scanner's geometry, and resample everything to a standard 24 slices at 224 pixels
+- Then one shared EfficientNet encodes every slice — each slice packaged with its two
+  neighbors so a 2D encoder still gets some 3D context
+- From there it's attention twice: first each series pools its 24 slices down to one
+  embedding, then the study pools its available series — and if a series type is
+  missing, the mask just drops it from the vote
+- That final study embedding maps to 12 independent probabilities, one per finding
 
-**Handoff:** "The biggest lever isn't in this diagram — +0.081 came from the labels."
+**Handoff:**
+- The interesting thing is the biggest single lever in all our experiments isn't
+  anything in this diagram — it was the +0.081 from the labels we trained on, and
+  Kelly's going to walk through how we mined those
 (then verbally to Kelly)
 
 ## Q&A soundbites
