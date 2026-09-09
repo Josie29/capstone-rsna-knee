@@ -116,27 +116,60 @@ labels. Kelly."
 
 ---
 
-## Slide 4 — KELLY-TODO: The Label Problem (~50s)
+## Slide 4 — The Label Problem (Kelly, ~50s)
 
-Placeholder — Kelly to write. Josie's handoff into this slide is "+0.081 came from the
-labels", so it should open on the label problem (only 58 of 4,407 studies labeled).
-Technical depth (mining prompts, validation method, ...) can go to an appendix slide
-for Q&A — see the editing guide.
+**Only 58 of 4,407 studies are labeled.** The other 4,349 labels were mined from the
+radiologists' reports that ship with every exam.
 
-- The label problem: [KELLY]
-- How the labels were mined: [KELLY]
-- How mining quality was validated: [KELLY]
-- (If useful: positives-per-finding chart data is in `docs/competition-notes.md`)
+- Read, then score: readers extract what each report *says* per finding, with a verbatim
+  quote that is mechanically verified; one deterministic function turns readings into
+  probabilities — same report, same label
+- Visual: three-block strip (measured on the 58 gold exams) — **denied ≈ 0.00** ·
+  **silent 0.07–0.50** · **asserted 0.41–0.79**
+- The trap: **silence is not absence.** A denial is an observation; silence is a missing
+  observation, and findings a report never mentions are present up to half the time.
+  ~⅓ of training cells are silent — scoring them 0 would poison the training set
+
+Talk track: "That +0.081 came from solving our label problem: fifty-eight ground-truth
+studies out of four and a half thousand. But every exam ships with the radiologist's
+report — so we mined those. Readers extract what each report says, with verbatim quotes
+we verify mechanically; then a single deterministic function turns readings into
+probabilities. The trap is what reports *don't* say. Measured on our gold exams: when a
+report denies a finding, it's essentially never there. When it's silent, the finding is
+present up to half the time — radiologists don't dictate every incidental. A third of
+our cells are silent, so scoring silence as zero would poison the set. Denials go near
+zero, assertions go high, and silence gets the measured rate given silence, adjusted per
+clinic — because a clinic that never mentions a finding tells you nothing by omitting it."
 
 ---
 
-## Slide 5 — KELLY-TODO: Labeling, part 2 (~50s)
+## Slide 5 — One Real Exam (Kelly, ~50s)
 
-Placeholder — Kelly to write; ends her segment, hands off to Ryan.
+**Watch one report become a training row.** Interactive: a real English report + this
+study's actual label row, driven by one button (3 clicks; clicks inside the demo don't
+advance the deck).
 
-- [KELLY]
-- [KELLY]
-- (If useful: the gold-audit counts live in `docs/experiments.md`)
+- Click 1 — reader highlights: tear **asserted**, ligaments/effusion/cartilage **denied**,
+  four findings **silent**
+- Click 2 — observed cells score (denied cells keep 0.04–0.10, never exactly 0);
+  silent cells stay open
+- Click 3 — the exam's real axial MRI strip appears: the report never mentions a Baker's
+  cyst, the image reader found one ("well-defined ovoid posteromedial cyst", slices 9–12,
+  amber box). That cell fills at 0.30 with training weight 0.6; image-cleared cells drop;
+  unread silence keeps the prior at weight 0.3
+- Validation footline: mined labels score **0.887 macro AUC vs the 58 gold exams** — the
+  ceiling line on Josie's chart; gold never trains, it only grades
+
+Talk track: "Here's a real exam. [click] The reader marks the meniscus tear as asserted
+and the ligaments as denied — every highlight is a verbatim quote. [click] Observed cells
+score directly; even denials keep a little probability, because radiologists are
+occasionally wrong. But four findings are silent — the report can't answer them. [click]
+So we looked. Our first model flagged silent cells where the pixels disagreed with the
+prior, and an image reader checked them. This report never mentions a Baker's cyst — and
+there it is on the actual MRI. That cell moves up and earns more training weight; cells
+the reader cleared move down. How do we know the mining works? The mined labels score
+0.887 against the fifty-eight gold exams — that's the ceiling line on Josie's chart —
+and those gold exams never enter training. They're the ruler, not the teacher. Ryan."
 
 ---
 
