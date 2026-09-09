@@ -47,7 +47,7 @@ Talk track: one sentence — "Three of us, one Kaggle competition: read a knee M
 
 ## Slide 2 — The Result (Josie, ~50s)
 
-**From 58 ground-truth labels to 0.887 macro AUC.**
+**Label mining and controlled model experiments delivered 0.887 macro AUC.**
 
 Visual: experiment-progression chart (left) + compact experiment table (right).
 
