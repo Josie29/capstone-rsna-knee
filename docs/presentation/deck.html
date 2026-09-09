@@ -107,38 +107,6 @@
                        color: var(--ink-3); border-bottom: 1px solid var(--hairline); padding-top: 0; }
   table.exp td.dim { color: var(--ink-3); }
 
-  /* slide 3: input -> output visual */
-  .io-cols { display: grid; grid-template-columns: minmax(22rem, 5fr) 6fr;
-             gap: clamp(2rem, 5vw, 4rem); align-items: center; }
-  @media (max-width: 56rem) { .io-cols { grid-template-columns: 1fr; } }
-  .io { display: flex; align-items: center; gap: clamp(1rem, 2vw, 2rem); }
-  .io .arrow { color: var(--ink-3); font-size: 1.5rem; flex: 0 0 auto; }
-  .io .study { text-align: center; flex: 0 0 auto; }
-  .io .study svg { width: 6.5rem; height: auto; display: block; margin: 0 auto var(--s2); }
-  .io .study p { margin: 0; font-family: var(--mono); font-size: 0.62rem; color: var(--ink-2); line-height: 1.5; }
-  .findgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem clamp(1rem, 2vw, 2rem); min-width: 0; }
-  .find { display: grid; grid-template-columns: 6.5rem 1fr; align-items: center; gap: 0.5rem; }
-  .find .n { font-size: 0.72rem; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .find .t { height: 0.35rem; background: var(--panel-2); border-radius: 3px; position: relative; }
-  .find .t::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w);
-                    background: var(--teal); border-radius: 3px; }
-  .io-cap { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em;
-            text-transform: uppercase; color: var(--ink-3); margin: var(--s3) 0 0; }
-
-  /* slide 3: architecture flow */
-  .arch { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s3); margin: var(--s8) 0 var(--s4); }
-  @media (max-width: 56rem) { .arch { grid-template-columns: 1fr 1fr; } }
-  .arch .node { background: var(--panel); border: 1px solid var(--hairline); border-radius: 8px;
-                padding: var(--s3) var(--s2); position: relative; text-align: center; }
-  .arch .node svg { display: block; margin: 0 auto var(--s2); width: 82%; height: auto; }
-  .arch .node h4 { margin: 0; font-size: 0.82rem; font-weight: 600; color: var(--ink); }
-  .arch .node p { margin: 0.2rem 0 0; font-family: var(--mono); font-size: 0.62rem;
-                  color: var(--ink-2); line-height: 1.4; }
-  .arch .node::after { content: "\2192"; /* → between nodes */ position: absolute; right: -0.85rem; top: 50%;
-                       transform: translateY(-50%); color: var(--ink-3); font-size: 0.9rem; z-index: 2; }
-  .arch .node:last-child::after { content: none; }
-  @media (max-width: 56rem) { .arch .node::after { content: none; } }
-
   /* slides 6-7: a screenshot mounted beside a statement. The quoted paper is white to
      its own edges and the reviewer UI is near-black to its own edges; both get the same
      frame, radius and lift so they read as one kind of object on the deck's ground. */
@@ -360,130 +328,16 @@
 
   <!-- 3 · The Model — Josie, ~40s -->
   <section class="slide" data-speaker="Josie · Model">
-    <div class="io-cols">
-      <div>
-        <p class="eyebrow">The model</p>
-        <h2>One knee MRI study in, 12 probabilities out</h2>
-        <p class="sub" style="font-size: 0.95rem;">Scored by macro-averaged ROC AUC &#183;
-           delivered as an offline Kaggle notebook, 9-hour cap.</p>
-      </div>
-      <div class="io">
-        <div class="study">
-          <svg viewBox="0 0 90 54" aria-hidden="true">
-            <rect x="14" y="6" width="46" height="30" rx="3" fill="none" stroke="#5D6E84" stroke-width="1.5"/>
-            <rect x="22" y="12" width="46" height="30" rx="3" fill="none" stroke="#93A3B7" stroke-width="1.5"/>
-            <rect x="30" y="18" width="46" height="30" rx="3" fill="#182436" stroke="#4FC8C2" stroke-width="1.5"/>
-          </svg>
-          <p>one study<br>~5.5 series &#183; 3 planes</p>
-        </div>
-        <div class="arrow">&#8594;</div>
-        <div style="flex: 1 1 auto; min-width: 0;">
-          <div class="findgrid">
-            <div class="find"><span class="n">ACL</span><span class="t" style="--w:55%"></span></div>
-            <div class="find"><span class="n">Medial OA</span><span class="t" style="--w:70%"></span></div>
-            <div class="find"><span class="n">MCL</span><span class="t" style="--w:30%"></span></div>
-            <div class="find"><span class="n">Lateral OA</span><span class="t" style="--w:35%"></span></div>
-            <div class="find"><span class="n">Medial Meniscus</span><span class="t" style="--w:85%"></span></div>
-            <div class="find"><span class="n">PF OA</span><span class="t" style="--w:45%"></span></div>
-            <div class="find"><span class="n">Lateral Meniscus</span><span class="t" style="--w:40%"></span></div>
-            <div class="find"><span class="n">Synovitis</span><span class="t" style="--w:60%"></span></div>
-            <div class="find"><span class="n">Effusion</span><span class="t" style="--w:80%"></span></div>
-            <div class="find"><span class="n">Baker's cyst</span><span class="t" style="--w:25%"></span></div>
-            <div class="find"><span class="n">Fracture</span><span class="t" style="--w:50%"></span></div>
-            <div class="find"><span class="n">Contusion</span><span class="t" style="--w:38%"></span></div>
-          </div>
-          <p class="io-cap">12 findings &#183; one probability each &#183; illustrative</p>
-        </div>
-      </div>
+    <p class="eyebrow">The model</p>
+    <h2>One knee MRI study in, 12 probabilities out</h2>
+    <p class="sub" style="font-size: 0.95rem;">Scored by macro-averaged ROC AUC &#183;
+       delivered as an offline Kaggle notebook, 9-hour cap.</p>
+    <div class="chart" style="margin-top: var(--s6);">
+      <svg id="pipe-net" viewBox="0 0 1200 312" role="img" style="width:100%; height:auto; display:block"
+           aria-label="Pipeline of the best model. DICOM series from a study feed a selection stage that keeps the best series for each of five buckets; each kept series is geometry-ordered and resampled to 24 slices at 224 pixels; one shared EfficientNet-B0 encodes 2.5D neighbor triplets; slice attention pools each series, series attention with bucket embeddings pools the study; twelve unlabeled output nodes carry one probability per finding."></svg>
     </div>
-    <div class="arch">
-      <div class="node">
-        <svg viewBox="0 0 90 54" aria-hidden="true">
-          <rect x="14" y="6" width="46" height="30" rx="3" fill="none" stroke="#7C9BB8" stroke-width="1.5"/>
-          <rect x="22" y="12" width="46" height="30" rx="3" fill="none" stroke="#46688C" stroke-width="1.5"/>
-          <rect x="30" y="18" width="46" height="30" rx="3" fill="#E3F2FB" stroke="#1173BE" stroke-width="1.5"/>
-        </svg>
-        <h4>Study</h4><p>~5.5 series<br>6 series types</p>
-      </div>
-      <div class="node">
-        <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g stroke-width="1.5" fill="#E3F2FB">
-            <rect x="4" y="14" width="13" height="26" rx="2" stroke="#1173BE"/>
-            <rect x="21" y="14" width="13" height="26" rx="2" stroke="#1173BE"/>
-            <rect x="38" y="14" width="13" height="26" rx="2" stroke="#1173BE"/>
-            <rect x="55" y="14" width="13" height="26" rx="2" stroke="#46688C" stroke-dasharray="3 2"/>
-            <rect x="72" y="14" width="13" height="26" rx="2" stroke="#46688C" stroke-dasharray="3 2"/>
-          </g>
-        </svg>
-        <h4>Select</h4><p>5 series buckets<br>3 fluid + 2 non-fluid</p>
-      </div>
-      <div class="node">
-        <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g stroke="#46688C" stroke-width="2" stroke-linecap="round">
-            <line x1="14" y1="8" x2="76" y2="8"/><line x1="14" y1="14" x2="76" y2="14"/>
-            <line x1="14" y1="20" x2="76" y2="20"/><line x1="14" y1="26" x2="76" y2="26"/>
-            <line x1="14" y1="32" x2="76" y2="32"/><line x1="14" y1="38" x2="76" y2="38"/>
-          </g>
-          <line x1="14" y1="46" x2="76" y2="46" stroke="#1173BE" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        <h4>Resample</h4><p>24 slices per series<br>cached volumes @224</p>
-      </div>
-      <div class="node">
-        <svg viewBox="0 0 90 54" aria-hidden="true">
-          <rect x="12" y="8" width="66" height="38" rx="4" fill="#E3F2FB" stroke="#1173BE" stroke-width="1.5"/>
-          <line x1="28" y1="8" x2="28" y2="46" stroke="#B9D9EC" stroke-width="1.5"/>
-          <line x1="44" y1="8" x2="44" y2="46" stroke="#B9D9EC" stroke-width="1.5"/>
-          <line x1="60" y1="8" x2="60" y2="46" stroke="#B9D9EC" stroke-width="1.5"/>
-        </svg>
-        <h4>EfficientNet-B0</h4><p>one shared 2.5D encoder<br>~5M params</p>
-      </div>
-      <div class="node">
-        <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g fill="#46688C">
-            <circle cx="14" cy="9" r="3"/><circle cx="14" cy="21" r="3"/><circle cx="14" cy="33" r="3"/><circle cx="14" cy="45" r="3"/>
-          </g>
-          <g stroke="#1173BE" stroke-linecap="round">
-            <line x1="18" y1="9" x2="72" y2="27" stroke-width="0.75" opacity="0.35"/>
-            <line x1="18" y1="21" x2="72" y2="27" stroke-width="2.5" opacity="0.95"/>
-            <line x1="18" y1="33" x2="72" y2="27" stroke-width="1.5" opacity="0.6"/>
-            <line x1="18" y1="45" x2="72" y2="27" stroke-width="0.75" opacity="0.35"/>
-          </g>
-          <circle cx="76" cy="27" r="4" fill="#1173BE"/>
-        </svg>
-        <h4>Slice attention</h4><p>pool 24 slices<br>&rarr; series embedding</p>
-      </div>
-      <div class="node">
-        <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g stroke-width="1.5" fill="#E3F2FB">
-            <rect x="8" y="4" width="20" height="10" rx="2" stroke="#1173BE"/>
-            <rect x="8" y="18" width="20" height="10" rx="2" stroke="#1173BE"/>
-            <rect x="8" y="32" width="20" height="10" rx="2" stroke="#1173BE"/>
-            <rect x="8" y="46" width="20" height="6" rx="2" stroke="#7C9BB8" stroke-dasharray="3 2"/>
-          </g>
-          <g stroke="#1173BE" stroke-linecap="round">
-            <line x1="30" y1="9" x2="72" y2="26" stroke-width="1.2" opacity="0.55"/>
-            <line x1="30" y1="23" x2="72" y2="26" stroke-width="2.4" opacity="0.95"/>
-            <line x1="30" y1="37" x2="72" y2="26" stroke-width="1.6" opacity="0.7"/>
-          </g>
-          <circle cx="76" cy="26" r="4" fill="#1173BE"/>
-        </svg>
-        <h4>Series attention</h4><p>+ bucket embedding<br>masked over available series</p>
-      </div>
-      <div class="node">
-        <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g fill="#1173BE">
-            <rect x="12" y="8" width="52" height="4" rx="2"/>
-            <rect x="12" y="16" width="30" height="4" rx="2"/>
-            <rect x="12" y="24" width="60" height="4" rx="2"/>
-            <rect x="12" y="32" width="20" height="4" rx="2" opacity="0.6"/>
-            <rect x="12" y="40" width="42" height="4" rx="2"/>
-          </g>
-        </svg>
-        <h4>12 probabilities</h4><p>one per finding<br>per study</p>
-      </div>
-    </div>
-    <p class="sub">The biggest lever isn't in this diagram — <strong class="accent">+0.081</strong>
-       came from the labels.</p>
+    <p class="sub" style="margin-top: var(--s4);">The biggest lever isn't in this diagram —
+       <strong class="accent">+0.081</strong> came from the labels.</p>
   </section>
 
   <!-- 4 · The Label Problem — Kelly, ~50s -->
@@ -768,5 +622,97 @@
     // capture each demo step headlessly; harmless when absent.
     const preset = parseInt(new URLSearchParams(location.search).get("step") ?? "0", 10);
     setStep(Number.isFinite(preset) ? Math.max(0, Math.min(3, preset)) : 0);
+  })();
+
+  // Slide 3: pipeline graphic — drawn from the E012 code (feat/knee-cnn-v3 train.py +
+  // dicom_worker.py): geometry-ordered slices, best-series-per-bucket selection,
+  // 24-slice @224 resample, shared EfficientNet-B0 over 2.5D triplets, slice attention,
+  // bucket embedding + masked series attention, 12 outputs.
+  (() => {
+    const svg = document.getElementById("pipe-net");
+    if (!svg) return;
+    // colors come from the live CSS palette, so the graphic follows any retheme
+    const css = getComputedStyle(document.documentElement);
+    const tok = (...names) => {
+      for (const n of names) { const c = css.getPropertyValue(n).trim(); if (c) return c; }
+      return "#888";
+    };
+    const ACC = tok("--blue-text", "--teal-text");   // accent marks
+    const MUT = tok("--ink-2");                       // muted marks + caption names
+    const DIM = tok("--ink-3");                       // faint marks + caption details
+    const FILL = tok("--panel-2");                    // shape fills
+    const GROUND = tok("--ground");                   // node outline ring
+    const NS = "http://www.w3.org/2000/svg";
+    const el = (tag, attrs) => {
+      const n = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+      svg.appendChild(n); return n;
+    };
+    const CY = 140;
+    const spread = (n, cy, gap) => Array.from({length: n}, (_, i) => cy + (i - (n - 1) / 2) * gap);
+    const edge = (x1, y1, x2, y2, w, o) =>
+      el("line", {x1, y1, x2, y2, stroke: ACC, "stroke-width": w, opacity: o, "stroke-linecap": "round"});
+    const node = (cx, cy, r) => el("circle", {cx, cy, r, fill: ACC, stroke: GROUND, "stroke-width": 1});
+    const cap = (x, name, detail) => {
+      el("text", {x, y: 288, "text-anchor": "middle", fill: MUT, "font-size": 10,
+                  "letter-spacing": 1, "font-family": "ui-monospace, Menlo, monospace"}).textContent = name.toUpperCase();
+      el("text", {x, y: 302, "text-anchor": "middle", fill: DIM, "font-size": 8.5,
+                  "font-family": "ui-monospace, Menlo, monospace"}).textContent = detail;
+    };
+
+    // 1 · DICOM study: three series stacks (edges drawn first, behind shapes)
+    const stackYs = [70, 140, 210];
+    const slotYs = spread(5, CY, 50);
+    for (const sy of stackYs) for (const [i, y] of slotYs.entries())
+      edge(118, sy, 226, y, 0.7, i < 3 ? 0.18 : 0.10);
+    for (const sy of stackYs)
+      for (let i = 3; i >= 0; i--)
+        el("rect", {x: 66 + i * 6, y: sy - 17 - i * 4, width: 34, height: 34, rx: 3,
+                    fill: FILL, stroke: i === 0 ? MUT : DIM,
+                    "stroke-width": 1.2, opacity: i === 0 ? 1 : 0.45});
+    cap(90, "dicom study", "~5.5 series");
+
+    // 2 · select 5 buckets (3 fluid solid, 2 non-fluid dashed)
+    for (const [i, y] of slotYs.entries())
+      edge(262, y, 358, y * 0.55 + CY * 0.45, 0.8, i < 3 ? 0.28 : 0.14);
+    for (const [i, y] of slotYs.entries())
+      el("rect", {x: 228, y: y - 20, width: 34, height: 40, rx: 3, fill: FILL,
+                  stroke: i < 3 ? ACC : MUT, "stroke-width": 1.4,
+                  ...(i < 3 ? {} : {"stroke-dasharray": "3 2"})});
+    cap(245, "select 5 series", "3 fluid + 2 non-fluid");
+
+    // 3 · resample grate: 24 slices
+    for (const y of spread(24, CY, 7))
+      el("line", {x1: 362, y1: y, x2: 418, y2: y, stroke: MUT, "stroke-width": 1.6,
+                  opacity: 0.7, "stroke-linecap": "round"});
+    cap(390, "resample", "ordered · 24 @ 224");
+
+    // 4 · encoder bands (narrowing)
+    for (const y of spread(6, CY, 26)) edge(420, y, 461, y * 0.8 + CY * 0.2, 0.8, 0.25);
+    const bands = [[470, 180], [505, 140], [540, 104], [575, 74]];
+    for (const [i, [x, h]] of bands.entries())
+      el("rect", {x, y: CY - h / 2, width: 14, height: h, rx: 6, fill: FILL,
+                  stroke: ACC, "stroke-width": 1.4, opacity: 0.55 + i * 0.12});
+    cap(525, "efficientnet-b0", "2.5d triplets · shared");
+
+    // 5 · slice attention (edges converge)
+    for (const y of spread(8, CY, 22))
+      edge(591, y, 710, CY, 1 + (1 - Math.abs(y - CY) / 90), 0.25 + (1 - Math.abs(y - CY) / 120) * 0.5);
+    node(720, CY, 11);
+    el("circle", {cx: 720, cy: CY, r: 17, fill: "none", stroke: ACC, "stroke-width": 1, opacity: 0.4});
+    cap(720, "slice attention", "24 slices → series embedding");
+
+    // 6 · series attention
+    edge(730, CY, 868, CY, 2.5, 0.9);
+    for (const dy of [-24, 24]) edge(728, CY + dy * 0.35, 868, CY, 1, 0.3);
+    node(880, CY, 11);
+    el("circle", {cx: 880, cy: CY, r: 17, fill: "none", stroke: ACC, "stroke-width": 1, opacity: 0.4});
+    cap(880, "series attention", "+ bucket embedding · masked");
+
+    // 7 · 12 outputs
+    const outYs = spread(12, CY, 19.5);
+    for (const y of outYs) edge(892, CY, 1112, y, 0.8, 0.35);
+    for (const y of outYs) node(1120, y, 4.5);
+    cap(1120, "12 probabilities", "one per finding");
   })();
 </script>

@@ -93,25 +93,28 @@ series with deeper sampling took it to 0.887."
 
 One knee MRI study in, 12 probabilities out.
 
-Input/output is shown visually, not as bullets: study glyph ("one study · ~5.5 series ·
-3 planes") → arrow → grid of all 12 findings, each with an illustrative probability bar,
-captioned "12 findings · one probability each · illustrative". Sits right of the title.
-One line of prose remains under the title: "Scored by macro-averaged ROC AUC · delivered
-as an offline Kaggle notebook, 9-hour cap."
+One line of prose under the title: "Scored by macro-averaged ROC AUC · delivered as an
+offline Kaggle notebook, 9-hour cap."
 
-Visual: full-width architecture flow diagram (SVG) of the current best model (v3), left → right:
+Visual: one full-width neural-network-style pipeline graphic (drawn from the E012 code —
+`feat/knee-cnn-v3` `train.py` + `dicom_worker.py` — every stage verified):
 
-1. **Study** — ~5.5 series, 6 series types
-2. **Select** — 5 series buckets (Sag / Cor / Ax fluid + Sag / Cor non-fluid)
-3. **Resample** — cached volumes, 24 slices per series @224
-4. **EfficientNet-B0** — one shared 2.5D slice encoder, ~5M params
-5. **Slice attention** — pool each series' 24 slices → series embedding
-6. **Series attention** — + bucket embedding; masked pool over available series
-7. **12 probabilities** — mini output bars
+1. **DICOM study** — three series stacks (~5.5 series per study)
+2. **Select 5 series** — best series per bucket (most slices wins); 3 fluid solid +
+   2 non-fluid dashed; a missing bucket stays dashed and is masked downstream
+3. **Resample** — slices ordered by patient-space geometry (InstanceNumber is
+   unreliable), linspace-resampled to 24 slices @224
+4. **EfficientNet-B0** — narrowing encoder bands; each slice sees its neighbors as
+   RGB channels (2.5D triplets, edges replicate), one shared encoder
+5. **Slice attention** — edges physically converge into a pooling node per series
+6. **Series attention** — + bucket embedding, masked over available series
+7. **12 output nodes** — unlabeled (Kelly introduces the findings later)
 
-Talk track: "Findings live in different planes and slices, and studies are ragged —
-series can be missing. Attention twice: each series pools its own slices, then the study
-pools its available series."
+Talk track: "Before any model: pick the right five series out of each study's pile of
+DICOMs, order the slices by scanner geometry, and resample everything to the same shape.
+Then one shared encoder reads every slice, and attention twice — each series pools its
+own slices, then the study pools its available series. Studies are ragged; the mask
+handles missing series."
 
 Handoff (footer): "The biggest lever isn't in this diagram — **+0.081** came from the
 labels." (No speaker name on the slide; the spoken handoff to Kelly happens verbally.)
