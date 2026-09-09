@@ -30,11 +30,11 @@ they own the final content.
 
 ## Slide 1 — Title (Josie, ~10s)
 
-**Reading the Scans, Mining the Reports**
+**Reading Knee MRIs with 98.7% of the Labels Missing**
 
 Weakly-supervised knee-MRI abnormality detection
 
-- **0.887 macro AUC on the hidden test set** — trained with 58 ground-truth labels and 4,349 we mined ourselves
+- **0.887 macro AUC on the hidden test set** — trained with 58 ground-truth labels and 4,349 we mined from the radiologists' own reports
 - RSNA Knee Abnormality Detection (Kaggle, 2026)
 - Gauntlet AI Capstone — Josie Machalek · Kelly · Ryan
 
