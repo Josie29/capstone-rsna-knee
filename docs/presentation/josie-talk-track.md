@@ -24,11 +24,11 @@
   our images are just grayscale — so to maximize the information added in this step we
   employ a 2.5-dimensionality trick: red gets the slice before, green the slice itself,
   blue the slice after. This matters because real anatomy like a tear or a cyst spans
-  neighboring slices, and a single flat slice can't show that
-- From there it's attention twice: first each series pools its 24 slices down to one
-  embedding, then the study pools its available series — and if a series type is
-  missing, the mask just drops it from the vote
-- That final study embedding maps to 12 independent probabilities, one per finding
+  neighboring slices.
+- Then we do 2 layers of attention: one weighs the 24 slices within each series — the
+  most informative slices count the most — and one weighs the series against each other,
+  blending everything into a single study summary that maps to our classification of
+  12 different abnormalities
 
 **Handoff:**
 - While these modeling improvements helped - a model can only be as good as the labels its trained on, so next I'm going to hand it over to Kelly to talk about the labeling process
