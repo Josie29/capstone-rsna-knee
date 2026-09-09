@@ -28,10 +28,7 @@
 - That final study embedding maps to 12 independent probabilities, one per finding
 
 **Handoff:**
-- The interesting thing is the biggest single lever in all our experiments isn't
-  anything in this diagram — it was the +0.081 from the labels we trained on, and
-  Kelly's going to walk through how we mined those
-(then verbally to Kelly)
+- While these modeling improvements helped - a model can only be as good as the labels its trained on, so next I'm going to hand it over to Kelly to talk about the labeling process
 
 ## Q&A soundbites
 

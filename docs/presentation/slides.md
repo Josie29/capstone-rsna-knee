@@ -116,8 +116,8 @@ Then one shared encoder reads every slice, and attention twice — each series p
 own slices, then the study pools its available series. Studies are ragged; the mask
 handles missing series."
 
-Handoff (footer): "The biggest lever isn't in this diagram — **+0.081** came from the
-labels." (No speaker name on the slide; the spoken handoff to Kelly happens verbally.)
+No footer text on the slide — the handoff to Kelly is spoken only (see
+`josie-talk-track.md`).
 
 ---
 
