@@ -38,7 +38,7 @@ Weakly-supervised knee-MRI abnormality detection
 - RSNA Knee Abnormality Detection (Kaggle, 2026)
 - Gauntlet AI Capstone — Josie Machalek · Kelly · Ryan
 
-Stat tiles: 0.887 test-set AUC (hot) · 58 ground-truth studies · 1.3% of data labeled
+Stat tiles: 0.887 test-set AUC (hot) · 570 GB of image data · 1.3% of studies labeled
 
 Talk track: one sentence — "Three of us, one Kaggle competition: read a knee MRI, predict
 12 findings, with almost no labels. I'll cover the model, Kelly the labels, Ryan the product."
