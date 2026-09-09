@@ -1,19 +1,20 @@
 <meta charset="utf-8">
-<title>Knee MRI Diagnostics: From Mined Reports to a Harnessed Model — Capstone Deck</title>
+<title>KneeNet — Capstone Deck</title>
 <style>
-  /* Radiology reading-room theme — deliberately single-theme, like the viewer it echoes. */
+  /* Evatox pharma theme — icy blue ground, deep navy ink, clinical blue accent,
+     purple for the TBD / silent state. Deliberately single-theme (light). */
   :root {
-    --ground: #0D1420;
-    --panel: #131D2C;
-    --panel-2: #182436;
-    --hairline: #24344A;
-    --ink: #E9EEF5;
-    --ink-2: #93A3B7;
-    --ink-3: #5D6E84;
-    --teal: #17A39A;        /* data marks — validated vs ground */
-    --teal-text: #4FC8C2;   /* text-tint of the accent, for headings/eyebrows */
-    --amber: #BE8330;       /* reserved: TBD / placeholder state */
-    --amber-text: #D9A254;
+    --ground: #D9EDF9;
+    --panel: #F7FCFF;
+    --panel-2: #E3F2FB;
+    --hairline: #B9D9EC;
+    --ink: #16365C;
+    --ink-2: #46688C;
+    --ink-3: #7C9BB8;
+    --blue: #2196D9;        /* data marks — validated vs ground */
+    --blue-text: #1173BE;   /* text-tint of the accent, for headings/eyebrows */
+    --purple: #9B51C9;      /* reserved: TBD / placeholder state */
+    --purple-text: #8236AF;
     --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
     --sans: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
     --s1: 0.25rem; --s2: 0.5rem; --s3: 0.75rem; --s4: 1rem; --s6: 1.5rem; --s8: 2rem; --s12: 3rem;
@@ -46,11 +47,11 @@
   .chrome.br { bottom: 1rem; right: 1.25rem; text-align: right; }
   .chrome.bl { bottom: 1rem; left: 1.25rem; color: var(--ink-2); }
   .chrome .im { color: var(--ink-2); }
-  .progress { position: fixed; bottom: 0; left: 0; height: 2px; background: var(--teal);
+  .progress { position: fixed; bottom: 0; left: 0; height: 2px; background: var(--blue);
               width: 0; transition: width 200ms ease; z-index: 10; }
 
   .eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.14em;
-             text-transform: uppercase; color: var(--teal-text); margin: 0 0 var(--s4); }
+             text-transform: uppercase; color: var(--blue-text); margin: 0 0 var(--s4); }
   h1 { font-size: clamp(2.4rem, 5.5vw, 4.2rem); font-weight: 700; line-height: 1.08;
        letter-spacing: -0.015em; margin: 0 0 var(--s4); text-wrap: balance; }
   h2 { font-size: clamp(1.7rem, 3.4vw, 2.6rem); font-weight: 700; line-height: 1.15;
@@ -60,10 +61,10 @@
   ul.points { margin: 0; padding: 0; list-style: none; max-width: 66ch; }
   ul.points li { padding-left: 1.4rem; position: relative; margin-bottom: var(--s3); color: var(--ink); }
   ul.points li::before { content: ""; position: absolute; left: 0; top: 0.62em;
-                         width: 0.55rem; height: 2px; background: var(--teal); }
+                         width: 0.55rem; height: 2px; background: var(--blue); }
   ul.points li .dim { color: var(--ink-2); }
   strong { font-weight: 600; }
-  .accent { color: var(--teal-text); }
+  .accent { color: var(--blue-text); }
   code { font-family: var(--mono); font-size: 0.88em; background: var(--panel-2);
          padding: 0.1em 0.35em; border-radius: 3px; }
 
@@ -75,7 +76,7 @@
              font-size: clamp(1.3rem, 2.4vw, 1.8rem); font-weight: 600; color: var(--ink); }
   .stat .k { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em;
              text-transform: uppercase; color: var(--ink-3); margin-top: var(--s1); }
-  .stat.hot .v { color: var(--teal-text); }
+  .stat.hot .v { color: var(--blue-text); }
 
   /* two-column slide body */
   .cols { display: grid; grid-template-columns: minmax(22rem, 5fr) 6fr; gap: clamp(2rem, 5vw, 4.5rem);
@@ -97,11 +98,11 @@
                  color: var(--ink-2); line-height: 1.3; }
   table.exp td:first-child { color: var(--ink-3); white-space: nowrap; }
   table.exp td:last-child { text-align: right; white-space: nowrap; padding-right: 0.25rem; }
-  table.exp .v-paid { color: var(--teal-text); }
+  table.exp .v-paid { color: var(--blue-text); }
   table.exp .v-null { color: var(--ink-3); }
-  table.exp .v-crash { color: var(--amber-text); }
-  table.exp tr.best td { color: var(--ink); background: color-mix(in oklab, var(--teal) 10%, transparent); }
-  table.exp tr.best td:first-child { color: var(--teal-text); font-weight: 600; }
+  table.exp .v-crash { color: var(--purple-text); }
+  table.exp tr.best td { color: var(--ink); background: color-mix(in oklab, var(--blue) 10%, transparent); }
+  table.exp tr.best td:first-child { color: var(--blue-text); font-weight: 600; }
   table.exp tr.hd td { font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
                        color: var(--ink-3); border-bottom: 1px solid var(--hairline); padding-top: 0; }
   table.exp td.dim { color: var(--ink-3); }
@@ -145,7 +146,7 @@
                gap: clamp(1.5rem, 3.5vw, 3rem); align-items: center; margin-top: var(--s4); }
   @media (max-width: 56rem) { .shot-cols { grid-template-columns: 1fr; } }
   .shot { margin: 0; padding: var(--s3); border: 1px solid var(--hairline); border-radius: 10px;
-          background: var(--panel); box-shadow: 0 2px 28px rgb(0 0 0 / 0.4); }
+          background: var(--panel); box-shadow: 0 2px 28px rgb(22 62 105 / 0.18); }
   .shot img { display: block; width: 100%; height: auto; border-radius: 5px; }
   .shot.paper { background: #FFFFFF; }              /* seams into the paper's own white */
   .shot.viewport { background: var(--panel-2); }    /* lifts the near-black UI off the ground */
@@ -158,8 +159,8 @@
                 font-size: clamp(0.98rem, 1.6vw, 1.25rem); }
   ol.numbered li { margin-bottom: var(--s6); line-height: 1.35; }
   ol.numbered li:last-child { margin-bottom: 0; }
-  ol.numbered .n { font-family: var(--mono); color: var(--teal-text); margin-right: 0.4em; }
-  ol.numbered u { text-decoration-color: var(--teal-text); text-decoration-thickness: 2px;
+  ol.numbered .n { font-family: var(--mono); color: var(--blue-text); margin-right: 0.4em; }
+  ol.numbered u { text-decoration-color: var(--blue-text); text-decoration-thickness: 2px;
                   text-underline-offset: 0.22em; }
 
   /* slide 8: `name :: detail` capability lines, then the closing claim */
@@ -167,12 +168,12 @@
                      font-size: 0.8em; color: var(--ink-2); }
   h2.wide { max-width: 42ch; margin-bottom: var(--s4); }
   .close { display: flex; align-items: center; gap: var(--s4); margin-top: var(--s6); }
-  .close svg { flex: none; width: clamp(1.8rem, 3.2vw, 2.75rem); height: auto; fill: var(--teal); }
+  .close svg { flex: none; width: clamp(1.8rem, 3.2vw, 2.75rem); height: auto; fill: var(--blue); }
   .close p { margin: 0; font-size: clamp(1.15rem, 2.2vw, 1.75rem); font-weight: 700;
              line-height: 1.2; letter-spacing: -0.01em; text-wrap: balance; }
 
   .tbd { display: inline-block; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
-         color: var(--amber-text); border: 1px solid color-mix(in oklab, var(--amber) 55%, transparent);
+         color: var(--purple-text); border: 1px solid color-mix(in oklab, var(--purple) 55%, transparent);
          border-radius: 999px; padding: 0.1rem 0.6rem; margin-left: var(--s2); vertical-align: middle; }
 
   .footer-note { margin-top: var(--s8); font-family: var(--mono); font-size: 0.72rem;
@@ -182,7 +183,7 @@
              font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em;
              color: var(--ink-3); text-transform: uppercase; z-index: 10; transition: opacity 400ms; }
 
-  :focus-visible { outline: 2px solid var(--teal-text); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--blue-text); outline-offset: 2px; }
 
   /* ---- Kelly · labels: three-block strip (slide 4) ---- */
   .blocks { display: flex; gap: var(--s3); margin-top: var(--s6); max-width: 62rem; }
@@ -197,9 +198,9 @@
   .block .cap b { display: block; color: var(--ink); font-weight: 600; }
   .block .cap .q { font-style: italic; color: var(--ink-3); }
   .b-denied .bar { background: color-mix(in oklab, var(--ink-3) 22%, var(--panel)); color: var(--ink-2); }
-  .b-silent .bar { background: color-mix(in oklab, var(--amber) 30%, var(--panel)); color: var(--amber-text); }
-  .b-silent .cap { border-color: color-mix(in oklab, var(--amber) 55%, transparent); }
-  .b-stated .bar { background: color-mix(in oklab, var(--teal) 26%, var(--panel)); color: var(--teal-text); }
+  .b-silent .bar { background: color-mix(in oklab, var(--purple) 30%, var(--panel)); color: var(--purple-text); }
+  .b-silent .cap { border-color: color-mix(in oklab, var(--purple) 55%, transparent); }
+  .b-stated .bar { background: color-mix(in oklab, var(--blue) 26%, var(--panel)); color: var(--blue-text); }
 
   /* ---- Kelly · labels: one-exam demo (slide 5) ---- */
   .demo-int { display: grid; grid-template-columns: 11fr 9fr; gap: clamp(1.2rem, 2.5vw, 2.5rem);
@@ -213,8 +214,8 @@
              text-transform: uppercase; color: var(--ink-3); margin-top: var(--s3); }
   .report mark { background: none; color: inherit; border-radius: 3px; padding: 0 2px;
                  transition: background 0.4s, box-shadow 0.4s, color 0.4s; }
-  .demo-on .m-assert { background: color-mix(in oklab, var(--teal) 20%, transparent);
-                       box-shadow: inset 0 -2px 0 var(--teal); color: var(--ink); }
+  .demo-on .m-assert { background: color-mix(in oklab, var(--blue) 20%, transparent);
+                       box-shadow: inset 0 -2px 0 var(--blue); color: var(--ink); }
   .demo-on .m-deny { background: color-mix(in oklab, var(--ink-3) 20%, transparent);
                      box-shadow: inset 0 -2px 0 var(--ink-3); color: var(--ink); }
   .montage { margin: 0; visibility: hidden; opacity: 0; transition: opacity 0.5s; }
@@ -223,11 +224,11 @@
                   line-height: 0; border: 1px solid var(--hairline); }
   .montage-wrap img { width: 100%; display: block; }
   .cyst-box { position: absolute; left: 12.5%; width: 50%; top: 4%; height: 92%;
-              border: 2px solid var(--amber-text); border-radius: 4px;
+              border: 2px solid var(--purple-text); border-radius: 4px;
               box-shadow: 0 0 0 2000px rgba(0,0,0,0.4); }
   .montage figcaption { font-size: 0.76rem; color: var(--ink-2); line-height: 1.45;
                         margin-top: var(--s2); }
-  .montage figcaption b { color: var(--amber-text); }
+  .montage figcaption b { color: var(--purple-text); }
   .lg-head, .lg-row { display: grid; grid-template-columns: 1.3fr 0.8fr 1.3fr; gap: var(--s2);
                       align-items: center; padding: 0.22rem 0.3rem; }
   .lg-head { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.1em;
@@ -238,31 +239,31 @@
              text-overflow: ellipsis; }
   .lg-verdict { font-family: var(--mono); font-size: 0.66rem; }
   .lg-verdict::after { content: "·"; color: var(--hairline); }
-  .demo-on .lg-row[data-kind="assert"] .lg-verdict::after { content: "asserted"; color: var(--teal-text); }
+  .demo-on .lg-row[data-kind="assert"] .lg-verdict::after { content: "asserted"; color: var(--blue-text); }
   .demo-on .lg-row[data-kind="deny"] .lg-verdict::after { content: "denied"; color: var(--ink-3); }
-  .demo-on .lg-row[data-kind="silent"] .lg-verdict::after { content: "silent"; color: var(--amber-text); font-style: italic; }
+  .demo-on .lg-row[data-kind="silent"] .lg-verdict::after { content: "silent"; color: var(--purple-text); font-style: italic; }
   .lg-val { display: flex; align-items: center; gap: 0.4rem; min-width: 0;
             font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 0.72rem; }
   .lg-val::before { content: ""; height: 7px; border-radius: 3px; flex: 0 0 auto; width: 0;
                     transition: width 0.6s ease; }
   .lg-val::after { content: "—"; color: var(--ink-3); }
-  [data-step="2"] .lg-row[data-kind="assert"] .lg-val::before, [data-step="3"] .lg-row[data-kind="assert"] .lg-val::before { background: var(--teal); width: calc(var(--w) * 52%); }
+  [data-step="2"] .lg-row[data-kind="assert"] .lg-val::before, [data-step="3"] .lg-row[data-kind="assert"] .lg-val::before { background: var(--blue); width: calc(var(--w) * 52%); }
   [data-step="2"] .lg-row[data-kind="deny"] .lg-val::before, [data-step="3"] .lg-row[data-kind="deny"] .lg-val::before { background: var(--ink-3); width: calc(var(--w) * 52%); }
-  [data-step="3"] .lg-row[data-kind="silent"] .lg-val::before { background: var(--amber); width: calc(var(--w) * 52%); }
+  [data-step="3"] .lg-row[data-kind="silent"] .lg-val::before { background: var(--purple); width: calc(var(--w) * 52%); }
   [data-step="2"] .lg-row[data-kind="assert"] .lg-val::after, [data-step="3"] .lg-row[data-kind="assert"] .lg-val::after { content: attr(data-vtext); color: var(--ink); font-weight: 600; }
   [data-step="2"] .lg-row[data-kind="deny"] .lg-val::after, [data-step="3"] .lg-row[data-kind="deny"] .lg-val::after { content: attr(data-vtext); color: var(--ink-2); }
-  [data-step="2"] .lg-row[data-kind="silent"] .lg-val::after { content: "?"; color: var(--amber-text); font-weight: 600; }
-  [data-step="3"] .lg-row[data-kind="silent"] .lg-val::after { content: attr(data-vtext) attr(data-note); color: var(--amber-text); font-weight: 600; }
-  [data-step="3"] .lg-row[data-img="yes"] { background: color-mix(in oklab, var(--amber) 16%, transparent); border-radius: 4px; }
+  [data-step="2"] .lg-row[data-kind="silent"] .lg-val::after { content: "?"; color: var(--purple-text); font-weight: 600; }
+  [data-step="3"] .lg-row[data-kind="silent"] .lg-val::after { content: attr(data-vtext) attr(data-note); color: var(--purple-text); font-weight: 600; }
+  [data-step="3"] .lg-row[data-img="yes"] { background: color-mix(in oklab, var(--purple) 16%, transparent); border-radius: 4px; }
   .lg-note { margin: var(--s3) 0 0; font-size: 0.76rem; color: var(--ink-2); line-height: 1.45;
              min-height: 3.4em; position: relative; }
   .lg-note > span { position: absolute; inset: 0; visibility: hidden; }
   [data-step="2"] .s2only { visibility: visible; }
   [data-step="3"] .s3only { visibility: visible; }
-  .s3only b, .s2only b { color: var(--amber-text); }
+  .s3only b, .s2only b { color: var(--purple-text); }
   .demo-ctl { display: flex; gap: var(--s2); align-items: center; margin-top: var(--s3); }
   #demo-next { font-family: var(--sans); font-weight: 600; font-size: 0.85rem;
-               background: var(--teal); color: #06231F; border: none; border-radius: 6px;
+               background: var(--blue); color: #FFFFFF; border: none; border-radius: 6px;
                padding: 0.5em 1em; cursor: pointer; }
   #demo-next:disabled { background: var(--panel-2); color: var(--ink-3); cursor: default; }
   #demo-reset { background: none; border: 1px solid var(--hairline); border-radius: 6px;
@@ -282,9 +283,8 @@
   <!-- 1 · Title — Josie, ~10s -->
   <section class="slide" data-speaker="Josie · Kelly · Ryan">
     <p class="eyebrow">Weakly-supervised medical imaging</p>
-    <h1>Knee MRI Diagnostics:<br>From Mined Reports to a Harnessed Model</h1>
-    <p class="sub">0.887 macro AUC on the hidden test set across 12 knee-MRI findings —
-       trained with 58 ground-truth labels and 4,349 we mined from the radiologists' own reports.</p>
+    <h1>KneeNet</h1>
+    <p class="sub">From knee MRI reports to a harnessed model<br>providing diagnostic support.</p>
     <div class="stats">
       <div class="stat hot"><div class="v">0.887</div><div class="k">test-set macro AUC</div></div>
       <div class="stat"><div class="v">570&nbsp;GB</div><div class="k">of image data</div></div>
@@ -311,8 +311,8 @@
           </g>
           <!-- one condensed series: each experiment's headline score -->
           <path d="M60,314 L128,313 L195,198 L263,198 L330,179 L398,181 L465,175 L533,63 L600,37"
-                fill="none" stroke="#4FC8C2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <g fill="#4FC8C2" stroke="#0D1420" stroke-width="1">
+                fill="none" stroke="#1173BE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <g fill="#1173BE" stroke="#FFFFFF" stroke-width="1">
             <circle cx="60" cy="314" r="4.5"/><circle cx="128" cy="313" r="4.5"/>
             <circle cx="195" cy="198" r="4.5"/><circle cx="263" cy="198" r="4.5"/>
             <circle cx="330" cy="179" r="4.5"/><circle cx="398" cy="181" r="4.5"/>
@@ -320,18 +320,18 @@
             <circle cx="600" cy="37" r="6"/>
           </g>
           <!-- best-experiment highlight ring -->
-          <circle cx="600" cy="37" r="13" fill="none" stroke="#4FC8C2" stroke-width="1.5" opacity="0.85"/>
+          <circle cx="600" cy="37" r="13" fill="none" stroke="#1173BE" stroke-width="1.5" opacity="0.85"/>
           <!-- direct labels on story points -->
           <g font-family="ui-monospace, Menlo, monospace">
-            <text x="60" y="338" text-anchor="middle" fill="#93A3B7" font-size="11">0.691</text>
-            <text x="229" y="222" text-anchor="middle" fill="#93A3B7" font-size="11">0.773</text>
-            <text x="465" y="199" text-anchor="middle" fill="#93A3B7" font-size="10">0.789</text>
-            <text x="518" y="67" text-anchor="end" fill="#93A3B7" font-size="10">0.868</text>
-            <text x="600" y="72" text-anchor="middle" fill="#4FC8C2" font-size="15" font-weight="700">0.887</text>
+            <text x="60" y="338" text-anchor="middle" fill="#46688C" font-size="11">0.691</text>
+            <text x="229" y="222" text-anchor="middle" fill="#46688C" font-size="11">0.773</text>
+            <text x="465" y="199" text-anchor="middle" fill="#46688C" font-size="10">0.789</text>
+            <text x="518" y="67" text-anchor="end" fill="#46688C" font-size="10">0.868</text>
+            <text x="600" y="72" text-anchor="middle" fill="#1173BE" font-size="15" font-weight="700">0.887</text>
           </g>
           <!-- x axis -->
-          <line x1="46" y1="372" x2="610" y2="372" stroke="#24344A" stroke-width="1"/>
-          <g font-family="ui-monospace, Menlo, monospace" font-size="9" fill="#5D6E84" text-anchor="middle">
+          <line x1="46" y1="372" x2="610" y2="372" stroke="#B9D9EC" stroke-width="1"/>
+          <g font-family="ui-monospace, Menlo, monospace" font-size="9" fill="#7C9BB8" text-anchor="middle">
             <text x="60" y="388">E001</text><text x="128" y="388">E002</text><text x="195" y="388">E003</text>
             <text x="263" y="388">E004</text><text x="330" y="388">E005</text><text x="398" y="388">E008</text>
             <text x="465" y="388">E009</text><text x="533" y="388">E011</text><text x="600" y="388">E012</text>
@@ -399,79 +399,79 @@
     <div class="arch">
       <div class="node">
         <svg viewBox="0 0 90 54" aria-hidden="true">
-          <rect x="14" y="6" width="46" height="30" rx="3" fill="none" stroke="#5D6E84" stroke-width="1.5"/>
-          <rect x="22" y="12" width="46" height="30" rx="3" fill="none" stroke="#93A3B7" stroke-width="1.5"/>
-          <rect x="30" y="18" width="46" height="30" rx="3" fill="#182436" stroke="#4FC8C2" stroke-width="1.5"/>
+          <rect x="14" y="6" width="46" height="30" rx="3" fill="none" stroke="#7C9BB8" stroke-width="1.5"/>
+          <rect x="22" y="12" width="46" height="30" rx="3" fill="none" stroke="#46688C" stroke-width="1.5"/>
+          <rect x="30" y="18" width="46" height="30" rx="3" fill="#E3F2FB" stroke="#1173BE" stroke-width="1.5"/>
         </svg>
         <h4>Study</h4><p>~5.5 series<br>6 series types</p>
       </div>
       <div class="node">
         <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g stroke-width="1.5" fill="#182436">
-            <rect x="4" y="14" width="13" height="26" rx="2" stroke="#4FC8C2"/>
-            <rect x="21" y="14" width="13" height="26" rx="2" stroke="#4FC8C2"/>
-            <rect x="38" y="14" width="13" height="26" rx="2" stroke="#4FC8C2"/>
-            <rect x="55" y="14" width="13" height="26" rx="2" stroke="#93A3B7" stroke-dasharray="3 2"/>
-            <rect x="72" y="14" width="13" height="26" rx="2" stroke="#93A3B7" stroke-dasharray="3 2"/>
+          <g stroke-width="1.5" fill="#E3F2FB">
+            <rect x="4" y="14" width="13" height="26" rx="2" stroke="#1173BE"/>
+            <rect x="21" y="14" width="13" height="26" rx="2" stroke="#1173BE"/>
+            <rect x="38" y="14" width="13" height="26" rx="2" stroke="#1173BE"/>
+            <rect x="55" y="14" width="13" height="26" rx="2" stroke="#46688C" stroke-dasharray="3 2"/>
+            <rect x="72" y="14" width="13" height="26" rx="2" stroke="#46688C" stroke-dasharray="3 2"/>
           </g>
         </svg>
         <h4>Select</h4><p>5 series buckets<br>3 fluid + 2 non-fluid</p>
       </div>
       <div class="node">
         <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g stroke="#93A3B7" stroke-width="2" stroke-linecap="round">
+          <g stroke="#46688C" stroke-width="2" stroke-linecap="round">
             <line x1="14" y1="8" x2="76" y2="8"/><line x1="14" y1="14" x2="76" y2="14"/>
             <line x1="14" y1="20" x2="76" y2="20"/><line x1="14" y1="26" x2="76" y2="26"/>
             <line x1="14" y1="32" x2="76" y2="32"/><line x1="14" y1="38" x2="76" y2="38"/>
           </g>
-          <line x1="14" y1="46" x2="76" y2="46" stroke="#4FC8C2" stroke-width="2" stroke-linecap="round"/>
+          <line x1="14" y1="46" x2="76" y2="46" stroke="#1173BE" stroke-width="2" stroke-linecap="round"/>
         </svg>
         <h4>Resample</h4><p>24 slices per series<br>cached volumes @224</p>
       </div>
       <div class="node">
         <svg viewBox="0 0 90 54" aria-hidden="true">
-          <rect x="12" y="8" width="66" height="38" rx="4" fill="#182436" stroke="#4FC8C2" stroke-width="1.5"/>
-          <line x1="28" y1="8" x2="28" y2="46" stroke="#24344A" stroke-width="1.5"/>
-          <line x1="44" y1="8" x2="44" y2="46" stroke="#24344A" stroke-width="1.5"/>
-          <line x1="60" y1="8" x2="60" y2="46" stroke="#24344A" stroke-width="1.5"/>
+          <rect x="12" y="8" width="66" height="38" rx="4" fill="#E3F2FB" stroke="#1173BE" stroke-width="1.5"/>
+          <line x1="28" y1="8" x2="28" y2="46" stroke="#B9D9EC" stroke-width="1.5"/>
+          <line x1="44" y1="8" x2="44" y2="46" stroke="#B9D9EC" stroke-width="1.5"/>
+          <line x1="60" y1="8" x2="60" y2="46" stroke="#B9D9EC" stroke-width="1.5"/>
         </svg>
         <h4>EfficientNet-B0</h4><p>one shared 2.5D encoder<br>~5M params</p>
       </div>
       <div class="node">
         <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g fill="#93A3B7">
+          <g fill="#46688C">
             <circle cx="14" cy="9" r="3"/><circle cx="14" cy="21" r="3"/><circle cx="14" cy="33" r="3"/><circle cx="14" cy="45" r="3"/>
           </g>
-          <g stroke="#4FC8C2" stroke-linecap="round">
+          <g stroke="#1173BE" stroke-linecap="round">
             <line x1="18" y1="9" x2="72" y2="27" stroke-width="0.75" opacity="0.35"/>
             <line x1="18" y1="21" x2="72" y2="27" stroke-width="2.5" opacity="0.95"/>
             <line x1="18" y1="33" x2="72" y2="27" stroke-width="1.5" opacity="0.6"/>
             <line x1="18" y1="45" x2="72" y2="27" stroke-width="0.75" opacity="0.35"/>
           </g>
-          <circle cx="76" cy="27" r="4" fill="#4FC8C2"/>
+          <circle cx="76" cy="27" r="4" fill="#1173BE"/>
         </svg>
         <h4>Slice attention</h4><p>pool 24 slices<br>&rarr; series embedding</p>
       </div>
       <div class="node">
         <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g stroke-width="1.5" fill="#182436">
-            <rect x="8" y="4" width="20" height="10" rx="2" stroke="#4FC8C2"/>
-            <rect x="8" y="18" width="20" height="10" rx="2" stroke="#4FC8C2"/>
-            <rect x="8" y="32" width="20" height="10" rx="2" stroke="#4FC8C2"/>
-            <rect x="8" y="46" width="20" height="6" rx="2" stroke="#5D6E84" stroke-dasharray="3 2"/>
+          <g stroke-width="1.5" fill="#E3F2FB">
+            <rect x="8" y="4" width="20" height="10" rx="2" stroke="#1173BE"/>
+            <rect x="8" y="18" width="20" height="10" rx="2" stroke="#1173BE"/>
+            <rect x="8" y="32" width="20" height="10" rx="2" stroke="#1173BE"/>
+            <rect x="8" y="46" width="20" height="6" rx="2" stroke="#7C9BB8" stroke-dasharray="3 2"/>
           </g>
-          <g stroke="#4FC8C2" stroke-linecap="round">
+          <g stroke="#1173BE" stroke-linecap="round">
             <line x1="30" y1="9" x2="72" y2="26" stroke-width="1.2" opacity="0.55"/>
             <line x1="30" y1="23" x2="72" y2="26" stroke-width="2.4" opacity="0.95"/>
             <line x1="30" y1="37" x2="72" y2="26" stroke-width="1.6" opacity="0.7"/>
           </g>
-          <circle cx="76" cy="26" r="4" fill="#4FC8C2"/>
+          <circle cx="76" cy="26" r="4" fill="#1173BE"/>
         </svg>
         <h4>Series attention</h4><p>+ bucket embedding<br>masked over available series</p>
       </div>
       <div class="node">
         <svg viewBox="0 0 90 54" aria-hidden="true">
-          <g fill="#4FC8C2">
+          <g fill="#1173BE">
             <rect x="12" y="8" width="52" height="4" rx="2"/>
             <rect x="12" y="16" width="30" height="4" rx="2"/>
             <rect x="12" y="24" width="60" height="4" rx="2"/>
@@ -672,35 +672,35 @@
       <div class="chart">
         <div class="title">One finding's ROC curve · area shaded = AUC</div>
         <svg viewBox="0 0 460 400" role="img" style="width: 100%; height: auto; display: block;"
-             aria-label="ROC curve: true-positive rate against false-positive rate. A teal curve bows above the dashed chance diagonal; the shaded area under it is the AUC, about 0.79. One threshold is marked as a point on the curve.">
+             aria-label="ROC curve: true-positive rate against false-positive rate. A blue curve bows above the dashed chance diagonal; the shaded area under it is the AUC, about 0.79. One threshold is marked as a point on the curve.">
           <!-- plot frame -->
-          <line x1="60" y1="340" x2="420" y2="340" stroke="#24344A" stroke-width="1"/>
-          <line x1="60" y1="340" x2="60" y2="20" stroke="#24344A" stroke-width="1"/>
+          <line x1="60" y1="340" x2="420" y2="340" stroke="#B9D9EC" stroke-width="1"/>
+          <line x1="60" y1="340" x2="60" y2="20" stroke="#B9D9EC" stroke-width="1"/>
           <!-- shaded AUC area under the curve -->
           <path d="M60,340 C 64,290 70,230 78,196 C 85,170 90,158 96,148 C 108,128 120,112 132,103
                    C 155,85 180,70 204,62 C 230,53 255,47 276,42 C 300,36 325,31 348,28 C 375,25 400,22 420,20 L420,340 Z"
-                fill="#17A39A" fill-opacity="0.16"/>
+                fill="#2196D9" fill-opacity="0.16"/>
           <!-- chance diagonal -->
-          <line x1="60" y1="340" x2="420" y2="20" stroke="#5D6E84" stroke-width="1.5" stroke-dasharray="5 5"/>
+          <line x1="60" y1="340" x2="420" y2="20" stroke="#7C9BB8" stroke-width="1.5" stroke-dasharray="5 5"/>
           <!-- ROC curve -->
           <path d="M60,340 C 64,290 70,230 78,196 C 85,170 90,158 96,148 C 108,128 120,112 132,103
                    C 155,85 180,70 204,62 C 230,53 255,47 276,42 C 300,36 325,31 348,28 C 375,25 400,22 420,20"
-                fill="none" stroke="#4FC8C2" stroke-width="2" stroke-linecap="round"/>
+                fill="none" stroke="#1173BE" stroke-width="2" stroke-linecap="round"/>
           <!-- one threshold, marked -->
-          <circle cx="132" cy="103" r="5" fill="#4FC8C2" stroke="#131D2C" stroke-width="2"/>
-          <text x="146" y="98" fill="#93A3B7" font-size="12" font-family="ui-monospace, Menlo, monospace">one threshold</text>
+          <circle cx="132" cy="103" r="5" fill="#1173BE" stroke="#F7FCFF" stroke-width="2"/>
+          <text x="146" y="98" fill="#46688C" font-size="12" font-family="ui-monospace, Menlo, monospace">one threshold</text>
           <!-- direct labels -->
-          <text x="250" y="200" fill="#4FC8C2" font-size="16" font-weight="600"
+          <text x="250" y="200" fill="#1173BE" font-size="16" font-weight="600"
                 font-family="ui-monospace, Menlo, monospace">AUC &#8776; 0.89</text>
-          <text x="290" y="158" fill="#5D6E84" font-size="12" font-family="ui-monospace, Menlo, monospace"
+          <text x="290" y="158" fill="#7C9BB8" font-size="12" font-family="ui-monospace, Menlo, monospace"
                 transform="rotate(-41 290 158)">chance &#183; AUC 0.50</text>
           <!-- axis ticks + titles -->
-          <text x="56" y="354" fill="#5D6E84" font-size="11" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">0</text>
-          <text x="420" y="354" fill="#5D6E84" font-size="11" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">1</text>
-          <text x="48" y="24" fill="#5D6E84" font-size="11" text-anchor="end" font-family="ui-monospace, Menlo, monospace">1</text>
-          <text x="240" y="378" fill="#93A3B7" font-size="12" text-anchor="middle" font-family="ui-monospace, Menlo, monospace"
+          <text x="56" y="354" fill="#7C9BB8" font-size="11" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">0</text>
+          <text x="420" y="354" fill="#7C9BB8" font-size="11" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">1</text>
+          <text x="48" y="24" fill="#7C9BB8" font-size="11" text-anchor="end" font-family="ui-monospace, Menlo, monospace">1</text>
+          <text x="240" y="378" fill="#46688C" font-size="12" text-anchor="middle" font-family="ui-monospace, Menlo, monospace"
                 letter-spacing="1">FALSE-POSITIVE RATE &#8594;</text>
-          <text x="24" y="180" fill="#93A3B7" font-size="12" text-anchor="middle" font-family="ui-monospace, Menlo, monospace"
+          <text x="24" y="180" fill="#46688C" font-size="12" text-anchor="middle" font-family="ui-monospace, Menlo, monospace"
                 letter-spacing="1" transform="rotate(-90 24 180)">TRUE-POSITIVE RATE &#8594;</text>
         </svg>
       </div>
