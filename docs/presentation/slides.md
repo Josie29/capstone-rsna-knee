@@ -30,7 +30,7 @@ they own the final content.
 
 ## Slide 1 — Title (Josie, ~10s)
 
-**Reading Knee MRIs with 98.7% of the Labels Missing**
+**The Radiologists Already Wrote the Labels**
 
 Weakly-supervised knee-MRI abnormality detection
 
