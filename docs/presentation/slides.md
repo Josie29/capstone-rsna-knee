@@ -91,7 +91,7 @@ series with deeper sampling took it to 0.887."
 
 ## Slide 3 — The Model (Josie, ~40s)
 
-One knee MRI study in, 12 probabilities out.
+**KneeNet architecture**
 
 One line of prose under the title: "Scored by macro-averaged ROC AUC · delivered as an
 offline Kaggle notebook, 9-hour cap."
