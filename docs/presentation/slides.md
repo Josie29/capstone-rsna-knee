@@ -57,8 +57,9 @@ storytelling, not peer review):
 
 - E001 0.691 → E002 0.692 → E003 0.773 → E004 0.773 → E005 0.786 → E008 0.785 →
   E009 0.789 → E011 0.868 → **E012 0.887 — highlighted as the best, ring + hot label**
-- Reference line: 0.887 label ceiling (miner vs gold — Kelly setup; the E012 point lands
-  exactly on it, a coincidence worth a spoken beat)
+- No reference lines — the 0.887 label-ceiling line was removed (implied the model fully
+  hit the miner's quality ceiling, which isn't a defensible claim); Kelly still cites
+  0.887 miner-vs-gold on her slide 5 as mining validation
 - Chart caption: "macro AUC · scored on the ~1,300-study hidden test set"
 - Crashed experiments (E006/E007) and the E010 null are omitted from the slide — the ID
   gaps stay visible on the x-axis; full history in `docs/experiments.md`
@@ -253,7 +254,7 @@ rate, chance diagonal, shaded area labeled AUC ≈ 0.89, one marked threshold po
 - The lever story (what paid / what didn't) lives entirely in slide 2's table + talk track — no separate ledger slide; Josie's segment stays at 3 slides to hold ~100s.
 - Slide 2's chart is one condensed series by deliberate choice: test score where submitted (E001–E004, E009, E011, E012), local eval otherwise (E005 0.786, E008 0.785). Crashes (E006/E007) and the E010 null are omitted; the x-axis keeps the ID gaps so nothing is hidden, just decluttered. If a judge asks about the mix or the gaps, the full per-protocol numbers are in `docs/experiments.md`.
 - E011/E012 on the slide = the pipeline rebuild (branch `feat/knee-cnn-v3`, internally "cnn v2/v3"): EfficientNet-B0 2.5D encoder, slice-then-series attention with bucket embeddings, 5-fold, cached volumes. E011 = 3 fluid buckets/depth 16 (0.868 test); E012 = 5 buckets/depth 24 (0.887 test). The IDs are presentational until their registry rows land. The rebuild jump vs E009 is uncontrolled (many changes at once) — no single-lever attribution claimed on the slide.
-- The E012 test point (0.887) landing exactly on the old miner-vs-gold ceiling line (0.887) is coincidence — different quantities. Worth one spoken beat, not a claim.
+- The E012 test score (0.887) numerically equalling the miner-vs-gold agreement (0.887) is coincidence — different quantities. If it comes up in Q&A, say so; don't claim the model "reached the label ceiling."
 - No "random guessing scores 0.5" framing on the main slides (too basic for a headline) — the 0.5 baseline belongs in appendix A1, where the metric is explained properly.
 - Appendix slides sit after slide 8 in `deck.html`; they are backup material for Q&A, not part of the timed 5 minutes.
 - Slide 2 frontloads the result by design: the audience gets the payoff before the two handoffs. v3 is highlighted as the best (ring + hot label + table-row accent).
