@@ -571,9 +571,9 @@
           <li><strong>Volume prep:</strong> slices sorted by position along the slice normal
               (InstanceNumber is unreliable here); rescale + MONOCHROME1 inversion;
               linspace-resample to 24 slices; 1&ndash;99 percentile window &rarr; uint8 @224</li>
-          <li><strong>2.5D encoding:</strong> each slice with its two neighbours as RGB
-              channels (edges replicate) &rarr; one shared EfficientNet-B0 &rarr; 1,280-d
-              feature per slice</li>
+          <li><strong>2.5D encoding:</strong> the RGB channels carry slice&nbsp;below /
+              slice / slice&nbsp;above (edges replicate) — through-plane context at 2D cost,
+              hence "2.5D" &rarr; one shared EfficientNet-B0 &rarr; 1,280-d feature per slice</li>
           <li><strong>Slice attention:</strong> tiny scorer (Linear &rarr; Tanh &rarr; Linear)
               softmax-weights the 24 slices into one series embedding</li>
           <li><strong>Bucket embedding:</strong> a learned 5-vector table tells the model

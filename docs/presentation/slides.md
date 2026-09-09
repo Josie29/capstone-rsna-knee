@@ -265,8 +265,9 @@ Left — what each stage does:
 - **Volume prep:** slices sorted by position along the slice normal (InstanceNumber
   unreliable); rescale + MONOCHROME1 inversion; linspace to 24 slices; 1–99 percentile
   window → uint8 @224
-- **2.5D encoding:** slice + two neighbours as RGB (edges replicate) → shared
-  EfficientNet-B0 → 1,280-d per slice
+- **2.5D encoding:** the RGB channels carry slice below / slice / slice above (edges
+  replicate) — through-plane context at 2D cost, hence "2.5D" → shared EfficientNet-B0 →
+  1,280-d per slice
 - **Slice attention:** Linear→Tanh→Linear scorer, softmax over 24 slices → series embedding
 - **Bucket embedding:** learned 5-vector table = "which series type am I looking at"
 - **Series attention:** same scorer over ≤5 series, masked for absent ones → dropout →
