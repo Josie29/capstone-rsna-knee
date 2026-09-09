@@ -232,6 +232,7 @@ from the placeholder closing slide, and was dropped so slide 8 carries Ryan's co
 Backup material for Q&A — not part of the timed 5 minutes.
 
 - A2 — ROC AUC, the evaluation metric explained
+- A3 — the best model stage by stage + hyperparameters
 - (Kelly / Ryan: add technical-depth slides after, per the editing guide)
 
 ---
@@ -250,6 +251,31 @@ rate, chance diagonal, shaded area labeled AUC ≈ 0.89, one marked threshold po
   much as a common effusion
 - Our 0.887: the model ranks a random abnormal study above a random normal one ~89% of
   the time, averaged across the 12 findings
+
+---
+
+## Appendix A3 — The best model, stage by stage (backup — not in the 5 minutes)
+
+For Q&A on the architecture. All facts from `feat/knee-cnn-v3` (`train.py` + `dicom_worker.py`).
+
+Left — what each stage does:
+
+- **Select:** series metadata → 5 buckets; most-slices series wins each bucket; missing
+  bucket = zero volume, mask 0
+- **Volume prep:** slices sorted by position along the slice normal (InstanceNumber
+  unreliable); rescale + MONOCHROME1 inversion; linspace to 24 slices; 1–99 percentile
+  window → uint8 @224
+- **2.5D encoding:** slice + two neighbours as RGB (edges replicate) → shared
+  EfficientNet-B0 → 1,280-d per slice
+- **Slice attention:** Linear→Tanh→Linear scorer, softmax over 24 slices → series embedding
+- **Bucket embedding:** learned 5-vector table = "which series type am I looking at"
+- **Series attention:** same scorer over ≤5 series, masked for absent ones → dropout →
+  linear → 12 logits
+
+Right — hyperparameter table: tf_efficientnet_b0 (ImageNet init) · 5×24@224² input ·
+AdamW lr 3e-4 wd 1e-2 · OneCycle 10 epochs 10% warm-up · batch 2×4 accum · fp16 +
+GradScaler · soft-target BCE with cell weights 1.0/0.3/0.6 · 5-fold multilabel-stratified
+seed 42 · gold-58 never trained on · Kaggle T4 ~3.5 h/fold.
 
 ---
 

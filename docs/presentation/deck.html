@@ -495,6 +495,7 @@
     <p class="sub">For Q&amp;A — not part of the timed 5 minutes.</p>
     <div class="stats">
       <div class="stat"><div class="v">A2</div><div class="k">ROC AUC, explained</div></div>
+      <div class="stat"><div class="v">A3</div><div class="k">model stages + hyperparameters</div></div>
     </div>
   </section>
 
@@ -553,6 +554,51 @@
           <text x="24" y="180" fill="#46688C" font-size="12" text-anchor="middle" font-family="ui-monospace, Menlo, monospace"
                 letter-spacing="1" transform="rotate(-90 24 180)">TRUE-POSITIVE RATE &#8594;</text>
         </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- A3 · Appendix: model stages + hyperparameters (E012 / knee-cnn v3, from train.py) -->
+  <section class="slide" data-speaker="Appendix" data-appendix>
+    <div class="cols">
+      <div>
+        <p class="eyebrow">Appendix &#183; the best model, stage by stage</p>
+        <h2>What each stage does</h2>
+        <ul class="points" style="font-size: 0.88rem;">
+          <li><strong>Select:</strong> series metadata &rarr; 5 buckets (Sag/Cor/Ax fluid,
+              Sag/Cor non-fluid); the series with the most slices wins each bucket;
+              a missing bucket becomes a zero volume with mask&nbsp;0</li>
+          <li><strong>Volume prep:</strong> slices sorted by position along the slice normal
+              (InstanceNumber is unreliable here); rescale + MONOCHROME1 inversion;
+              linspace-resample to 24 slices; 1&ndash;99 percentile window &rarr; uint8 @224</li>
+          <li><strong>2.5D encoding:</strong> each slice with its two neighbours as RGB
+              channels (edges replicate) &rarr; one shared EfficientNet-B0 &rarr; 1,280-d
+              feature per slice</li>
+          <li><strong>Slice attention:</strong> tiny scorer (Linear &rarr; Tanh &rarr; Linear)
+              softmax-weights the 24 slices into one series embedding</li>
+          <li><strong>Bucket embedding:</strong> a learned 5-vector table tells the model
+              which series type it is looking at</li>
+          <li><strong>Series attention:</strong> same scorer over the &le;5 series embeddings,
+              masked so absent series get zero weight &rarr; dropout &rarr; linear &rarr; 12 logits</li>
+        </ul>
+      </div>
+      <div>
+        <table class="exp">
+          <tr class="hd"><td>Hyperparameter</td><td></td><td></td><td>Value</td></tr>
+          <tr><td colspan="3">encoder</td><td>tf_efficientnet_b0 &#183; ImageNet init</td></tr>
+          <tr><td colspan="3">input</td><td>5 series &#215; 24 slices @ 224&#178;</td></tr>
+          <tr><td colspan="3">optimizer</td><td>AdamW &#183; lr 3e-4 &#183; wd 1e-2</td></tr>
+          <tr><td colspan="3">schedule</td><td>OneCycle &#183; 10 epochs &#183; 10% warm-up</td></tr>
+          <tr><td colspan="3">batch</td><td>2 &#215; 4 accumulation (effective 8)</td></tr>
+          <tr><td colspan="3">precision</td><td>fp16 autocast + GradScaler</td></tr>
+          <tr><td colspan="3">loss</td><td>soft-target BCE &#183; cell weights 1.0 / 0.3 / 0.6</td></tr>
+          <tr><td colspan="3">augmentation</td><td>&#177;12&#176; rot &#183; 0.88&ndash;1.12 scale &#183; slice dropout</td></tr>
+          <tr><td colspan="3">validation</td><td>5-fold multilabel-stratified &#183; seed 42</td></tr>
+          <tr><td colspan="3">holdout</td><td>58 gold studies &#183; never trained on</td></tr>
+          <tr><td colspan="3">hardware</td><td>Kaggle T4 &#183; ~3.5 h per fold</td></tr>
+        </table>
+        <p style="font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em;
+                  color: var(--ink-3); margin: var(--s2) 0 0;">source: feat/knee-cnn-v3 &#183; train.py + dicom_worker.py</p>
       </div>
     </div>
   </section>
