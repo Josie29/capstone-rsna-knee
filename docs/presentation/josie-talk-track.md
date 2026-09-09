@@ -20,11 +20,11 @@
 - Each study comes in as about 5 and a half series of DICOM slices; before any modeling
   we select the best series for each of 5 series types, order the slices by the
   scanner's geometry, and resample everything to a standard 24 slices at 224 pixels
-- Then one shared EfficientNet encodes every slice, using a 2.5D trick: we abuse the
-  RGB channels — red gets the slice before, green the slice itself, blue the slice
-  after. A pretrained 2D encoder expects a color image anyway, so instead of color
-  those channels carry 3D context — which matters because real anatomy like a tear or
-  a cyst spans neighboring slices, and a single flat slice can't show that
+- Then one shared EfficientNet encodes every slice. The encoder expects RGB values, but
+  our images are just grayscale — so to maximize the information added in this step we
+  employ a 2.5-dimensionality trick: red gets the slice before, green the slice itself,
+  blue the slice after. This matters because real anatomy like a tear or a cyst spans
+  neighboring slices, and a single flat slice can't show that
 - From there it's attention twice: first each series pools its 24 slices down to one
   embedding, then the study pools its available series — and if a series type is
   missing, the mask just drops it from the vote
