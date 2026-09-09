@@ -19,3 +19,4 @@ lightning_logs/
 
 # Submission CSVs contain per-study predictions keyed to test StudyInstanceUIDs.
 submissions/
+*.pptx

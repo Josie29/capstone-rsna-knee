@@ -665,6 +665,9 @@
       setStep(Math.min(3, parseInt(demo.getAttribute("data-step"), 10) + 1));
     });
     reset.addEventListener("click", () => { setStep(0); });
-    setStep(0);
+    // ?step=N presets the demo state — used by scripts/export_deck_pptx.py to
+    // capture each demo step headlessly; harmless when absent.
+    const preset = parseInt(new URLSearchParams(location.search).get("step") ?? "0", 10);
+    setStep(Number.isFinite(preset) ? Math.max(0, Math.min(3, preset)) : 0);
   })();
 </script>
