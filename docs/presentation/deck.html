@@ -106,6 +106,24 @@
                        color: var(--ink-3); border-bottom: 1px solid var(--hairline); padding-top: 0; }
   table.exp td.dim { color: var(--ink-3); }
 
+  /* slide 3: input -> output visual */
+  .io-cols { display: grid; grid-template-columns: minmax(22rem, 5fr) 6fr;
+             gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+  @media (max-width: 56rem) { .io-cols { grid-template-columns: 1fr; } }
+  .io { display: flex; align-items: center; gap: clamp(1rem, 2vw, 2rem); }
+  .io .arrow { color: var(--ink-3); font-size: 1.5rem; flex: 0 0 auto; }
+  .io .study { text-align: center; flex: 0 0 auto; }
+  .io .study svg { width: 6.5rem; height: auto; display: block; margin: 0 auto var(--s2); }
+  .io .study p { margin: 0; font-family: var(--mono); font-size: 0.62rem; color: var(--ink-2); line-height: 1.5; }
+  .findgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem clamp(1rem, 2vw, 2rem); min-width: 0; }
+  .find { display: grid; grid-template-columns: 6.5rem 1fr; align-items: center; gap: 0.5rem; }
+  .find .n { font-size: 0.72rem; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .find .t { height: 0.35rem; background: var(--panel-2); border-radius: 3px; position: relative; }
+  .find .t::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w);
+                    background: var(--teal); border-radius: 3px; }
+  .io-cap { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em;
+            text-transform: uppercase; color: var(--ink-3); margin: var(--s3) 0 0; }
+
   /* slide 3: architecture flow */
   .arch { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s3); margin: var(--s8) 0 var(--s4); }
   @media (max-width: 56rem) { .arch { grid-template-columns: 1fr 1fr; } }
@@ -342,14 +360,42 @@
 
   <!-- 3 · The Model — Josie, ~40s -->
   <section class="slide" data-speaker="Josie · Model">
-    <p class="eyebrow">The model</p>
-    <h2>One knee MRI study in, 12 probabilities out</h2>
-    <ul class="points">
-      <li><strong>Input:</strong> a multi-planar MRI study; <strong>output:</strong> per-study
-          probability for 12 binary findings — ligaments, menisci, osteoarthritis, effusion, fracture&hellip;</li>
-      <li><strong>Scored by macro-averaged ROC AUC</strong>; delivered as an offline
-          Kaggle notebook, 9-hour cap</li>
-    </ul>
+    <div class="io-cols">
+      <div>
+        <p class="eyebrow">The model</p>
+        <h2>One knee MRI study in, 12 probabilities out</h2>
+        <p class="sub" style="font-size: 0.95rem;">Scored by macro-averaged ROC AUC &#183;
+           delivered as an offline Kaggle notebook, 9-hour cap.</p>
+      </div>
+      <div class="io">
+        <div class="study">
+          <svg viewBox="0 0 90 54" aria-hidden="true">
+            <rect x="14" y="6" width="46" height="30" rx="3" fill="none" stroke="#5D6E84" stroke-width="1.5"/>
+            <rect x="22" y="12" width="46" height="30" rx="3" fill="none" stroke="#93A3B7" stroke-width="1.5"/>
+            <rect x="30" y="18" width="46" height="30" rx="3" fill="#182436" stroke="#4FC8C2" stroke-width="1.5"/>
+          </svg>
+          <p>one study<br>~5.5 series &#183; 3 planes</p>
+        </div>
+        <div class="arrow">&#8594;</div>
+        <div style="flex: 1 1 auto; min-width: 0;">
+          <div class="findgrid">
+            <div class="find"><span class="n">ACL</span><span class="t" style="--w:55%"></span></div>
+            <div class="find"><span class="n">Medial OA</span><span class="t" style="--w:70%"></span></div>
+            <div class="find"><span class="n">MCL</span><span class="t" style="--w:30%"></span></div>
+            <div class="find"><span class="n">Lateral OA</span><span class="t" style="--w:35%"></span></div>
+            <div class="find"><span class="n">Medial Meniscus</span><span class="t" style="--w:85%"></span></div>
+            <div class="find"><span class="n">PF OA</span><span class="t" style="--w:45%"></span></div>
+            <div class="find"><span class="n">Lateral Meniscus</span><span class="t" style="--w:40%"></span></div>
+            <div class="find"><span class="n">Synovitis</span><span class="t" style="--w:60%"></span></div>
+            <div class="find"><span class="n">Effusion</span><span class="t" style="--w:80%"></span></div>
+            <div class="find"><span class="n">Baker's cyst</span><span class="t" style="--w:25%"></span></div>
+            <div class="find"><span class="n">Fracture</span><span class="t" style="--w:50%"></span></div>
+            <div class="find"><span class="n">Contusion</span><span class="t" style="--w:38%"></span></div>
+          </div>
+          <p class="io-cap">12 findings &#183; one probability each &#183; illustrative</p>
+        </div>
+      </div>
+    </div>
     <div class="arch">
       <div class="node">
         <svg viewBox="0 0 90 54" aria-hidden="true">
@@ -437,7 +483,7 @@
       </div>
     </div>
     <p class="sub">The biggest lever isn't in this diagram — <strong class="accent">+0.081</strong>
-       came from the labels. <strong>Kelly.</strong></p>
+       came from the labels.</p>
   </section>
 
   <!-- 4 · The Label Problem — Kelly, ~50s -->

@@ -93,9 +93,11 @@ series with deeper sampling took it to 0.887."
 
 One knee MRI study in, 12 probabilities out.
 
-- Input: a multi-planar knee MRI study; output: per-study probability for 12 binary
-  findings — ligaments, menisci, osteoarthritis, effusion, fracture...
-- Scored by macro ROC AUC; delivered as an offline Kaggle notebook, 9-hour cap
+Input/output is shown visually, not as bullets: study glyph ("one study · ~5.5 series ·
+3 planes") → arrow → grid of all 12 findings, each with an illustrative probability bar,
+captioned "12 findings · one probability each · illustrative". Sits right of the title.
+One line of prose remains under the title: "Scored by macro-averaged ROC AUC · delivered
+as an offline Kaggle notebook, 9-hour cap."
 
 Visual: full-width architecture flow diagram (SVG) of the current best model (v3), left → right:
 
@@ -112,7 +114,7 @@ series can be missing. Attention twice: each series pools its own slices, then t
 pools its available series."
 
 Handoff (footer): "The biggest lever isn't in this diagram — **+0.081** came from the
-labels. Kelly."
+labels." (No speaker name on the slide; the spoken handoff to Kelly happens verbally.)
 
 ---
 
